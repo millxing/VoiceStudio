@@ -11,5 +11,6 @@ shots=/tmp/VoiceStudio-shots
 rm -rf ~/Library/Saved\ Application\ State/com.robschoen.voicestudio.savedState
 # Seed data only fills an empty store, so start from nothing.
 rm -f $store $store-shm $store-wal
+rm -rf /tmp/VoiceStudio-test.data
 rm -rf $shots
 APP_STORE=$store APP_SEED=1 APP_SNAPSHOT=$shots $app "$@"

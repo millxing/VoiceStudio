@@ -34,8 +34,24 @@ enum Snapshot {
                 NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
                 for page in SidebarItem.allCases where only?.contains(page.rawValue) ?? true {
                     model.sidebar = page
-                    try? await Task.sleep(for: .seconds(0.8))
-                    capture(to: "\(dir)/\(page.rawValue)-\(mode).png")
+                    try? await Task.sleep(for: .seconds(0.4))
+                    // Lists may clear their selection when their page leaves.
+                    // Seed snapshots explicitly select an existing row.
+                    if page == .voices { model.selectedVoice = model.voices.first?.id }
+                    if page == .takes { model.selectedTake = model.takes.first?.id }
+                    if page == .scripts, model.selectedScripts.isEmpty, let script = model.scripts.first {
+                        model.selectedScripts = [script.id]
+                    }
+                    try? await Task.sleep(for: .seconds(0.4))
+                    await capture(to: "\(dir)/\(page.rawValue)-\(mode).png")
+                }
+                if only == nil || only?.contains("add-voice") == true {
+                    model.editingVoice = nil; model.showingVoiceSheet = true
+                    try? await Task.sleep(for: .seconds(0.5))
+                    let sheet = NSApp.windows.first(where: { $0.attachedSheet != nil })?.attachedSheet
+                    await capture(to: "\(dir)/add-voice-\(mode).png", window: sheet)
+                    model.showingVoiceSheet = false
+                    try? await Task.sleep(for: .seconds(0.3))
                 }
             }
             if only == nil || only?.contains("settings") == true {
@@ -48,7 +64,7 @@ enum Snapshot {
                         model.settingsTab = tab
                         try? await Task.sleep(for: .seconds(0.8))
                         let settings = NSApp.windows.first { $0.isVisible && $0 !== main && !$0.isSheet }
-                        capture(to: "\(dir)/settings-\(tab.rawValue)-\(mode).png", window: settings)
+                        await capture(to: "\(dir)/settings-\(tab.rawValue)-\(mode).png", window: settings)
                     }
                 }
             }
@@ -64,7 +80,7 @@ enum Snapshot {
     /// permission for the app that started this one (your terminal, or Claude).
     /// Without it, falls back to drawing the view hierarchy, which leaves
     /// sidebars and glass blank.
-    private static func capture(to path: String, window: NSWindow? = nil) {
+    private static func capture(to path: String, window: NSWindow? = nil) async {
         // Another app can hide this one while snapshots run (computer use hides
         // apps it does not control). Hidden windows cannot be captured.
         if NSApp.isHidden { NSApp.unhideWithoutActivation() }
@@ -73,8 +89,21 @@ enum Snapshot {
             return
         }
         // Active, like a window someone is using: real accent colors and focus rings.
-        NSApp.activate()
-        window.makeKeyAndOrderFront(nil)
+        // Activation is asynchronous. Wait for the actual key-window state
+        // before capturing, so the first image cannot be an inactive window.
+        for _ in 0..<10 {
+            // Snapshot-only activation: cooperative activate() can be refused
+            // while the terminal/agent remains frontmost. This API is still
+            // supported by the macOS 26 SDK and is confined to /tmp test runs.
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            try? await Task.sleep(for: .milliseconds(200))
+            if NSApp.isActive && window.isKeyWindow { break }
+        }
+        guard NSApp.isActive && window.isKeyWindow else {
+            print("SNAPSHOT refused inactive window \(path)")
+            return
+        }
         let size = window.contentView?.bounds.size ?? .zero
         GridProbes.shared.write(to: path.replacingOccurrences(of: ".png", with: "-layout.json"), window: size)
         try? FileManager.default.removeItem(atPath: path)
@@ -89,7 +118,7 @@ enum Snapshot {
                 print("SNAPSHOT \(path)")
                 return
             }
-            Thread.sleep(forTimeInterval: 0.5)
+            try? await Task.sleep(for: .milliseconds(500))
         }
         guard let view = window.contentView?.superview ?? window.contentView,
               let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }

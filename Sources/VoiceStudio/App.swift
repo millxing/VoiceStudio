@@ -1,86 +1,77 @@
 import AppKit
-import SwiftData
+import Combine
 import SwiftUI
 
-// VoiceStudio
-//   VoiceStudio                      the app
-//   APP_STORE=<file> VoiceStudio     use another database (tests, experiments)
-//   APP_SNAPSHOT=<dir> VoiceStudio   save a PNG of every sidebar page and Settings tab in light and dark mode, then quit
-//   APP_SEED=1 VoiceStudio           fill an empty /tmp store with sample items (tools/snap.sh)
-//   VoiceStudio --selftest           run the self-test on a /tmp store and quit with 0 or 1 (tools/selftest.sh)
-//   APP_ACCENT=<id> VoiceStudio      run with another accent from Theme.all (UI/Theme.swift)
-//   APP_GRID=1 VoiceStudio           draw the 8 pt grid and the layout probes over the window
-
+final class StudioMenuState: ObservableObject {
+    @Published var canGenerate = false
+    @Published var hasScripts = false
+    @Published var canStop = false
+    @Published var canPlay = false
+    @Published var hasTake = false
+    @Published var canResume = false
+    func update(_ model: AppModel) {
+        canGenerate = model.canGenerate
+        hasScripts = model.scripts.contains { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        canStop = model.queueRunning
+        canPlay = model.take?.status == .completed
+        hasTake = model.take != nil
+        canResume = model.queuedCount > 0 && !model.queueRunning
+    }
+}
 @main
 struct VoiceStudioApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @State private var model = AppModel(container: Store.makeContainer())
-
+    @State private var model = AppModel()
+    @StateObject private var menu = StudioMenuState()
     var body: some Scene {
         Window("VoiceStudio", id: "main") {
             ContentView()
-                .environment(model)
-                .themed()
+                .environment(model).themed()
                 .overlay { if GridOverlay.enabled { GridOverlay() } }
-                .frame(minWidth: 760, minHeight: 480)
+                .frame(minWidth: 1080, minHeight: 720)
+                .onChange(of: model.library, initial: true) { menu.update(model) }
+                .onChange(of: model.selectedScripts) { menu.update(model) }
+                .onChange(of: model.selectedTake) { menu.update(model) }
+                .onChange(of: model.queueRunning) { menu.update(model) }
+                .task { delegate.model = model }
         }
-        .modelContainer(model.container)
-        .defaultSize(width: 1100, height: 720)
+        .defaultLaunchBehavior(.presented)
+        .defaultSize(width: 1240, height: 820)
         .windowToolbarStyle(.unified)
         .commands {
             SidebarCommands()
             ToolbarCommands()
             CommandGroup(replacing: .newItem) {
-                Button("New Item") { model.addItem() }
-                    .keyboardShortcut("n")
+                Button("New Script") { model.addScript() }.keyboardShortcut("n")
+                Button("Import Text Files…") { model.importScripts() }.keyboardShortcut("o")
+                Button("Add Voice…") { model.addVoice() }.keyboardShortcut("v", modifiers: [.command, .shift])
+            }
+            CommandMenu("Speech") {
+                Button("Generate Selected") { model.queue() }.keyboardShortcut("g").disabled(!menu.canGenerate)
+                Button("Generate All") { model.queue(all: true) }.keyboardShortcut("g", modifiers: [.command, .shift]).disabled(!menu.hasScripts)
+                Divider()
+                Button("Stop Queue") { model.stopQueue() }.keyboardShortcut(".").disabled(!menu.canStop)
+                Button("Resume Queue") { model.resumeQueue() }.disabled(!menu.canResume)
+            }
+            CommandMenu("Playback") {
+                Button("Play/Pause") { if let take = model.take { model.play(take) } }
+                    .keyboardShortcut("p", modifiers: [.command, .option]).disabled(!menu.canPlay)
+                Button("Export Take…") { if let take = model.take { model.export(take) } }
+                    .keyboardShortcut("e", modifiers: [.command, .shift]).disabled(!menu.canPlay)
+                Button("Show in Finder") { if let take = model.take { model.reveal(take) } }
+                    .keyboardShortcut("r", modifiers: [.command, .shift]).disabled(!menu.canPlay)
             }
         }
-
-        Settings {
-            SettingsView()
-                .environment(model)
-                .themed()
-        }
-        .windowResizability(.contentSize)
+        Settings { SettingsView().environment(model).themed() }.windowResizability(.contentSize)
     }
 }
-
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    weak var model: AppModel?
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Started from a terminal, the process is not a foreground app yet.
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate()
+        NSApp.setActivationPolicy(.regular); NSApp.activate()
     }
-
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
-
-    /// The self-test's result becomes the exit code, after a normal quit.
     func applicationWillTerminate(_ notification: Notification) {
+        model?.shutdown()
         if SelfTest.requested { exit(SelfTest.exitCode) }
-    }
-}
-
-/// Where the data lives: ~/Library/Application Support/VoiceStudio/VoiceStudio.store
-enum Store {
-    /// True when APP_STORE points somewhere else (tests, snapshots, seed data).
-    static var isOverridden: Bool {
-        !(ProcessInfo.processInfo.environment["APP_STORE"] ?? "").isEmpty
-    }
-
-    static var url: URL {
-        if let path = ProcessInfo.processInfo.environment["APP_STORE"], !path.isEmpty {
-            return URL(fileURLWithPath: path)
-        }
-        let dir = URL.applicationSupportDirectory.appending(path: "VoiceStudio", directoryHint: .isDirectory)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appending(path: "VoiceStudio.store")
-    }
-
-    static func makeContainer() -> ModelContainer {
-        do {
-            return try ModelContainer(for: Item.self, configurations: ModelConfiguration(url: url))
-        } catch {
-            fatalError("Could not open the database at \(url.path): \(error)")
-        }
     }
 }

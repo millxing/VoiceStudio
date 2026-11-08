@@ -1,0 +1,51 @@
+{
+  "probes" : [
+    {
+      "area" : "script-page",
+      "height" : 768,
+      "inset" : 20,
+      "kind" : "area",
+      "name" : "script-page",
+      "width" : 763,
+      "x" : 477,
+      "y" : 52
+    },
+    {
+      "area" : "script-page",
+      "edge" : "lead",
+      "height" : 43,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "script-title",
+      "width" : 723,
+      "x" : 497,
+      "y" : 72
+    },
+    {
+      "area" : "script-page",
+      "edge" : "lead",
+      "height" : 518,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "script-editor",
+      "width" : 723,
+      "x" : 497,
+      "y" : 131
+    },
+    {
+      "area" : "script-page",
+      "edge" : "lead",
+      "height" : 135,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "script-controls",
+      "width" : 723,
+      "x" : 497,
+      "y" : 665
+    }
+  ],
+  "window" : {
+    "height" : 820,
+    "width" : 1240
+  }
+}

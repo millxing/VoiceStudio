@@ -1,7 +1,7 @@
 # VoiceStudio
 
 A native macOS app in SwiftUI. It runs on this Mac only, with a local
-SwiftData database and no server.
+Codable JSON library and no server.
 
 ## Layout
 
@@ -15,7 +15,7 @@ SwiftData database and no server.
 ## Build and check
 
 - Build and install: `./build.sh`. Add `--open` to restart the app with the new build. The build shows warnings; fix them.
-- Unit tests: `swift test --scratch-path ~/Library/Developer/VoiceStudio/test-build`.
+- Library and worker checks: `tools/check.sh`. This CLT lacks the Swift Testing/XCTest runtime.
 - Self-test (the app's real functions on a /tmp store): `tools/selftest.sh`. Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
 - After every UI change, take snapshots with sample data and look at them: `tools/snap.sh`.
   It writes `/tmp/VoiceStudio-shots/<page>-light.png` and `-dark.png` for every sidebar page, and `settings-<tab>-light.png` and `-dark.png` for every Settings tab, then quits. `APP_SNAPSHOT_PAGES=all,settings tools/snap.sh` limits the pages.
@@ -50,3 +50,12 @@ The bama plugin has a skill for each step: `mac-design` (design rules),
 ## Git
 
 - Commit after each working change, with a message that says what the user can now do.
+
+## Current implementation and remaining manual checks
+
+- Metadata is Codable JSON with atomic writes; source audio is separate in Application Support.
+- Resources/worker.py is installed from Engine/worker.py by build.sh; the Python runtime remains external and configurable.
+- Run tools/integration.sh after changing process callbacks, the generation queue, audio playback, or the worker protocol.
+- Never run automated mutations against the real library. Use APP_STORE=/tmp/<name>.store.
+- External menu audit still needed: with no script selection, Speech > Generate Selected is disabled; selecting scripts enables it. While running, Stop Queue is enabled. With no completed take selected, Playback commands are disabled. Selecting a completed take enables them. CUA attachment returned cgWindowNotFound on this machine; do not report hover checks as passed until actually observed.
+- Microphone/input-device and VoiceOver checks are still manual. See docs/VERIFICATION.md.

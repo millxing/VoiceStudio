@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "VoiceStudio",
-    platforms: [.macOS(.v26)],
+    platforms: [.macOS("26.0")],
     targets: [
         // Rules and data logic with no SwiftUI, so tests run without the app.
         .target(name: "VoiceStudioKit"),
@@ -11,8 +11,8 @@ let package = Package(
             name: "VoiceStudio",
             dependencies: ["VoiceStudioKit"],
             // App code runs on the main thread unless you say otherwise.
-            swiftSettings: [.defaultIsolation(MainActor.self)]
+            swiftSettings: [.unsafeFlags(["-default-isolation", "MainActor"])]
         ),
-        .testTarget(name: "VoiceStudioKitTests", dependencies: ["VoiceStudioKit"]),
+        .executableTarget(name: "VoiceStudioChecks", dependencies: ["VoiceStudioKit"], path: "Tests/VoiceStudioKitTests"),
     ]
 )

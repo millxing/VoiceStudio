@@ -1,0 +1,12 @@
+PASS New Script selects a retained document
+PASS Multiple text imports select both documents
+PASS Library survives reopening
+PASS Removing scripts can be undone
+PASS Voice copies multiple references
+PASS Two scripts create four recoverable takes
+PASS Missing interpreter reports an actionable error
+PASS Stop Queue cancels pending work
+PASS Valid symbol: doc.text
+PASS Valid symbol: person.wave.2
+PASS Valid symbol: waveform
+SELFTEST PASS 11 checks

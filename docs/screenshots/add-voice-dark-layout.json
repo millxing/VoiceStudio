@@ -1,0 +1,137 @@
+{
+  "probes" : [
+    {
+      "area" : "take-page",
+      "height" : 447.079833984375,
+      "inset" : 20,
+      "kind" : "area",
+      "name" : "take-page",
+      "width" : 763,
+      "x" : 477,
+      "y" : 52
+    },
+    {
+      "area" : "take-page",
+      "edge" : "lead",
+      "height" : 45,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "take-title",
+      "width" : 182,
+      "x" : 497,
+      "y" : 72
+    },
+    {
+      "area" : "take-page",
+      "edge" : "lead",
+      "height" : 24,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "take-player",
+      "width" : 723,
+      "x" : 497,
+      "y" : 137
+    },
+    {
+      "area" : "take-page",
+      "edge" : "lead",
+      "height" : 26.079833984375,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "take-actions",
+      "width" : 405,
+      "x" : 497,
+      "y" : 181
+    },
+    {
+      "area" : "take-page",
+      "edge" : "lead",
+      "height" : 176,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "take-metadata",
+      "width" : 168,
+      "x" : 497,
+      "y" : 227.079833984375
+    },
+    {
+      "area" : "take-page",
+      "edge" : "lead",
+      "height" : 56,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "take-source",
+      "width" : 723,
+      "x" : 497,
+      "y" : 423.079833984375
+    },
+    {
+      "area" : "voice-sheet",
+      "height" : 305.079833984375,
+      "inset" : 20,
+      "kind" : "area",
+      "name" : "voice-sheet",
+      "width" : 640,
+      "x" : 0,
+      "y" : 0.4600830078125
+    },
+    {
+      "area" : "voice-sheet",
+      "edge" : "lead",
+      "height" : 21,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "sheet-title",
+      "width" : 77,
+      "x" : 20,
+      "y" : 20.4600830078125
+    },
+    {
+      "area" : "voice-sheet",
+      "edge" : "lead",
+      "height" : 24,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "sheet-name",
+      "width" : 600,
+      "x" : 20,
+      "y" : 61.4600830078125
+    },
+    {
+      "area" : "voice-sheet",
+      "edge" : "lead",
+      "height" : 32,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "sheet-guidance",
+      "width" : 575,
+      "x" : 20,
+      "y" : 105.4600830078125
+    },
+    {
+      "area" : "voice-sheet",
+      "edge" : "lead",
+      "height" : 84.079833984375,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "sheet-references",
+      "width" : 234,
+      "x" : 20,
+      "y" : 157.4600830078125
+    },
+    {
+      "area" : "voice-sheet",
+      "height" : 24,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "sheet-actions",
+      "width" : 600,
+      "x" : 20,
+      "y" : 261.5399169921875
+    }
+  ],
+  "window" : {
+    "height" : 306,
+    "width" : 640
+  }
+}

@@ -1,0 +1,101 @@
+# VoiceStudio
+
+A native Mac app for local XTTS speech generation and voice cloning. Built with
+BAMA's native macOS workflow for personal use on this M4 Max Mac Studio.
+
+## Launch
+
+Open `~/Applications/VoiceStudio.app`. The engine warms up in the background;
+its status is shown at the bottom of the sidebar. Initial loading takes longer
+than generating another take with the already-loaded model.
+
+1. In **Voices**, choose **Add Voice…**. Name the voice and import one or more
+   reference clips, or record your own microphone. Preview and save it. Use
+   clean speech from one speaker; start with about 6–15 seconds per clip.
+2. In **Scripts**, create a script or **Import Text Files…** (Command-O).
+   Multiple files can be selected together. UTF-8 and UTF-16 with a byte-order
+   mark are accepted; each file becomes an editable, autosaved script.
+3. Select one or more scripts with Command-click or Shift-click. Choose a
+   voice, language, speed, and **Takes** count (1–20 per script).
+4. Choose **Generate Selected** (Command-G), or Speech > **Generate All**.
+   Alternate takes have different random seeds. Work is processed sequentially.
+5. In **Takes**, listen, seek, compare, **Export Take…** as WAV, or reveal it in
+   Finder. Every take keeps its text, voice, model, speed, language, and seed.
+
+**Stop Queue** cancels the current and queued work; completed takes stay saved.
+A failed/canceled take can be retried as a new take with the same settings and
+seed. Interrupted jobs become failed at next launch, and queued work can resume.
+Long scripts are split at sentence/word boundaries within both the model's
+character guidance and token limit, then joined with short pauses into one WAV
+per take. Very long unbroken text is split as needed. This is generation, not an
+editing timeline; splicing and assembly are planned separately.
+
+## Engine and local data
+
+Settings > Engine lets you choose Apple GPU (MPS) or CPU, a Python interpreter,
+and an optional custom XTTS model folder containing `model.pth`, `config.json`,
+and `vocab.json` (plus `speakers_xtts.pth` for built-in voices if available).
+Custom models without built-in speakers can use cloned voice references.
+
+This personal build uses the isolated Python environment at
+`../.venv/bin/python`, created for the benchmark, and the already downloaded
+model cache in this macOS account. It packages the worker into the `.app` and
+requires no browser, Gradio server, or terminal during normal use. Keep that
+runtime folder available; if it moves, select its Python in Settings. The
+interpreter and PyTorch runtime are not bundled into the app.
+
+If you need a replacement runtime:
+
+```sh
+uv venv --python 3.12 "$HOME/Library/Application Support/VoiceStudio/Runtime"
+uv pip install --python "$HOME/Library/Application Support/VoiceStudio/Runtime/bin/python" -r Engine/requirements.lock.txt
+```
+
+Select that interpreter in Settings. Model license terms must have been accepted
+in this account. The app never auto-accepts them. If needed, run the following
+interactively using that Python, review the prompt, and answer it yourself:
+
+```sh
+python -c 'from TTS.api import TTS; TTS("tts_models/multilingual/multi-dataset/xtts_v2")'
+```
+
+The engine enables strict MPS without unsupported-operation CPU fallback; normal
+preprocessing may still run on CPU. The first model download requires internet;
+after installation, generation stays local. All 17 XTTS languages are offered;
+Chinese and Japanese tokenizer dependencies are included in the runtime lock.
+English speech generation is integration-tested; other languages need listening
+review with your own scripts. Microphone recording needs first-use macOS consent.
+
+Your scripts, voice-reference copies, settings, engine log, and WAV files live
+under `~/Library/Application Support/VoiceStudio/`. Back up that folder. Source
+text is stored in `Library.json`, so moving an imported text file is harmless.
+Remove actions can be undone with Command-Z. Removing a voice/take from the
+library retains its audio for Undo, existing takes, and future editing. This
+first version does not automatically purge unused source audio.
+
+## Build and verify
+
+```sh
+./build.sh --open
+tools/check.sh        # Foundation library checks + worker chunk-boundary tests
+tools/selftest.sh     # native app actions against /tmp storage
+tools/integration.sh  # real multi-script, multiple-take MPS voice cloning
+tools/snap.sh        # every main page, voice sheet and Settings, light/dark
+tools/grid-lint.sh
+swift tools/check-layout.swift /tmp/VoiceStudio-shots/*-layout.json
+```
+
+All test stores use `/tmp`, never your real library. The installed CLT has stale
+private PackageDescription interfaces, a macOS 27 SDK lacking SwiftUI macro
+plugins, and no XCTest/Swift Testing macro runtime. Build scripts select the
+installed macOS 26.5 SDK and use a local copy of PackageDescription support files
+without the stale private interfaces; system tools are never modified. Library
+checks use a small executable harness instead of unavailable testing frameworks.
+The CLT build engine may print linker search-path warnings for absent Xcode
+framework directories; these do not affect the application. Swift source builds
+in Swift 6 mode without source warnings. On a full-Xcode Mac these workarounds
+can be removed. The fallback app icon uses SF Symbols because Icon Composer's
+`actool` is not available in this CLT install.
+
+See `docs/BRIEF.md`, `docs/STORIES.md`, `docs/DESIGN.md`, and `docs/VERIFICATION.md`.
+XTTS model terms are included in `Engine/XTTS-MODEL-LICENSE.txt`.

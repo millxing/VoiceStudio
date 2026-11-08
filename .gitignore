@@ -6,3 +6,6 @@ xcuserdata/
 .DS_Store
 .env*
 /shots/
+
+__pycache__/
+*.pyc
