@@ -5,7 +5,7 @@ BAMA's native macOS workflow for personal use on this M4 Max Mac Studio.
 
 ## Launch
 
-Open `~/Applications/VoiceStudio.app`. The engine warms up in the background;
+Open `/Applications/VoiceStudio.app`. The engine warms up in the background;
 its status is shown at the bottom of the sidebar. Initial loading takes longer
 than generating another take with the already-loaded model.
 

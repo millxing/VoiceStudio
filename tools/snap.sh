@@ -4,7 +4,7 @@
 #        APP_SNAPSHOT_PAGES=all,settings tools/snap.sh
 #        tools/snap.sh -AppleShowScrollBars Always     see the scroll bars as people with a mouse see them
 set -u
-app=~/Applications/VoiceStudio.app/Contents/MacOS/VoiceStudio
+app=/Applications/VoiceStudio.app/Contents/MacOS/VoiceStudio
 store=/tmp/VoiceStudio-test.store
 shots=/tmp/VoiceStudio-shots
 # A crashed run leaves saved window state, and the next launch would wait on a "reopen windows?" alert.

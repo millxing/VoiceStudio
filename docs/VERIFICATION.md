@@ -1,6 +1,6 @@
 # Verification — 2026-11-08
 
-Installed release: `~/Applications/VoiceStudio.app` (ad hoc signed), macOS 26.6.2,
+Installed release: `/Applications/VoiceStudio.app` (ad hoc signed), macOS 26.6.2,
 M4 Max / 64 GB. Swift 6 language mode. No Swift source warnings. The installed
 CLT emits linker warnings about missing Xcode framework search paths; documented
 in README. No system toolchain files were changed.

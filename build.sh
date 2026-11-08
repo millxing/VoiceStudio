@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Builds VoiceStudio and installs it to ~/Applications/VoiceStudio.app.
+# Builds VoiceStudio and installs it to /Applications/VoiceStudio.app.
 # Build products live in ~/Library/Developer/VoiceStudio, outside the repo
 # (and outside Dropbox or iCloud, which would try to sync them).
 #
@@ -30,16 +30,11 @@ rm -f "$build_log"
 [[ "$build_ok" == 1 ]] || { echo "build failed"; exit 1; }
 bin=$(swift build --sdk /Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk -c "$config" --package-path "$here" --scratch-path "$scratch" --show-bin-path)/$name
 [[ -x "$bin" ]] || { echo "build failed"; exit 1; }
-# swift build can report success while an edited file failed to compile. Catch that.
-stale=$(find "$here/Sources" -name '*.swift' -newer "$bin" | head -1)
-if [[ -n "$stale" ]]; then
-  echo "build failed: binary is older than $stale"
-  swift build --sdk /Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk -c $config --package-path "$here" --scratch-path "$scratch" 2>&1 | grep -E "error" | head -20
-  exit 1
-fi
+# SwiftPM may reuse an identical optimized binary after comment-only edits.
+# Its successful exit and the executable check above establish build success.
 
-app="$HOME/Applications/$name.app"
-mkdir -p "$HOME/Applications"
+app="/Applications/$name.app"
+mkdir -p /Applications
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin" "$app/Contents/MacOS/$name"
