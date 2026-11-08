@@ -45,6 +45,17 @@ enum Snapshot {
                     try? await Task.sleep(for: .seconds(0.4))
                     await capture(to: "\(dir)/\(page.rawValue)-\(mode).png")
                 }
+                if (only == nil || only?.contains("cached-voice") == true), let cached = model.voices.first(where: { $0.cachedFile != nil }) {
+                    model.sidebar = .voices; model.selectedVoice = cached.id
+                    try? await Task.sleep(for: .seconds(0.5))
+                    await capture(to: "\(dir)/cached-voice-\(mode).png")
+                    model.editingVoice = cached; model.showingVoiceSheet = true
+                    try? await Task.sleep(for: .seconds(0.5))
+                    let cachedSheet = NSApp.windows.first(where: { $0.attachedSheet != nil })?.attachedSheet
+                    await capture(to: "\(dir)/edit-cached-voice-\(mode).png", window: cachedSheet)
+                    model.showingVoiceSheet = false
+                    try? await Task.sleep(for: .seconds(0.3))
+                }
                 if only == nil || only?.contains("add-voice") == true {
                     model.editingVoice = nil; model.showingVoiceSheet = true
                     try? await Task.sleep(for: .seconds(0.5))

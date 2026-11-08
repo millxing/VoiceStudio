@@ -91,6 +91,23 @@ UX:
 - Access: native form labels and explicit restart command.
 Status: done
 
+## M2 — Saved voice import
+
+### S-008 Import an XTTS cached voice
+Screens: add-voice, cached-voice, edit-cached-voice, takes
+Acceptance:
+- [unit] Accept standard Coqui caches, supported legacy tensor names/pairs, and speaker banks; reject unsafe pickle objects, unrelated checkpoints and invalid tensors.
+- [unit] Version-one libraries retain their contents when upgraded; new voices and takes persist their cached-voice paths.
+- [self] Inspect and normalize a cached voice, select one speaker from a bank, and copy it into the library with no original audio present.
+- [self] Generate multiple MPS takes using the saved conditioning, retain it in take snapshots, and reopen the results.
+- [snap] Add/Edit Voice explains the Cached Voice source, speaker choice, and absence of playable reference audio in light/dark mode.
+UX:
+- Flow: Add Voice → Cached Voice (.pth) → Import Cached Voice → choose a speaker if needed → Save Voice → Use This Voice → Generate.
+- Surface: existing voice task sheet, because this is another source for the same named voice; source selection is inline.
+- States: no file, checking file, validated file, optional speaker choice, saving, and a readable import error. Cancel while inspecting cancels publication; Save is disabled until valid.
+- Access: native labeled source picker, import button, optional speaker picker, Cancel/Save keyboard actions. No icon-only toolbar changes.
+Status: done
+
 ## Later
 - Timeline with nondestructive ranges, splicing, crossfades, and consolidated audio export.
 - Model fine-tuning.

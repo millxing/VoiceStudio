@@ -40,7 +40,7 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin" "$app/Contents/MacOS/$name"
 sed -e "s/__BUILD__/$(date +%Y%m%d%H%M)/" "$here/Info.plist.in" > "$app/Contents/Info.plist"
 # Local resources: Python worker and benchmark environment, independent of launch cwd.
-cp "$here/Engine/worker.py" "$here/Engine/requirements.lock.txt" "$here/Engine/XTTS-MODEL-LICENSE.txt" "$app/Contents/Resources/"
+cp "$here/Engine/voice_cache.py" "$here/Engine/worker.py" "$here/Engine/requirements.lock.txt" "$here/Engine/XTTS-MODEL-LICENSE.txt" "$app/Contents/Resources/"
 python3 - "$here" "$app/Contents/Resources/runtime-default.json" <<'PYCONFIG'
 import json, sys
 from pathlib import Path

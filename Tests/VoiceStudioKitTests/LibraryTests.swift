@@ -16,7 +16,7 @@ static func expectThrows<T>(_ operation: @autoclosure () throws -> T) throws {
     throw LibraryFile.failure("Check \(checks) expected an error")
 }
 static func main() throws {
-    try testImports(); try testSnapshotsAndRecovery(); try testCorruptLibrary()
+    try testImports(); try testSnapshotsAndRecovery(); try testCorruptLibrary(); try testCachedVoiceCompatibility()
     print("PASS \(checks) library checks")
 }
 static func testImports() throws {
@@ -61,4 +61,32 @@ static func testCorruptLibrary() throws {
     try LibraryFile.save(library, to: url)
     try expectThrows(try LibraryFile.load(from: url))
 }
+static func testCachedVoiceCompatibility() throws {
+    let voice = VoiceReference(name: "Imported narrator", files: [], cachedFile: "Voices/test/cache.pth")
+    var library = StudioLibrary(); library.voices = [voice]
+    let script = ScriptDocument(title: "Test", text: "Hello.")
+    library.takes = [SpeechTake(script: script, voiceName: voice.name, speaker: "", references: [], language: "en", speed: 1, seed: 42, modelFolder: "", device: "mps", number: 1, cachedVoice: voice.cachedFile)]
+    let encoded = try JSONEncoder().encode(library)
+    let decoded = try JSONDecoder().decode(StudioLibrary.self, from: encoded)
+    try expect(decoded.voices.first?.cachedFile == voice.cachedFile)
+    try expect(decoded.takes.first?.cachedVoice == voice.cachedFile)
+    var old = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+    var oldVoices = old["voices"] as! [[String: Any]]
+    oldVoices[0].removeValue(forKey: "cachedFile"); oldVoices[0]["files"] = ["Voices/old/reference.wav"]; old["voices"] = oldVoices
+    var oldTakes = old["takes"] as! [[String: Any]]
+    oldTakes[0].removeValue(forKey: "cachedVoice"); oldTakes[0]["references"] = ["Voices/old/reference.wav"]; old["takes"] = oldTakes
+    old["schemaVersion"] = 1
+    let oldURL = FileManager.default.temporaryDirectory.appendingPathComponent("VoiceStudio-old-\(UUID()).json")
+    defer { try? FileManager.default.removeItem(at: oldURL) }
+    try JSONSerialization.data(withJSONObject: old).write(to: oldURL)
+    let migrated = try LibraryFile.load(from: oldURL)
+    try expect(migrated.schemaVersion == 2)
+    try expect(migrated.voices.first?.cachedFile == nil)
+    try expect(migrated.takes.first?.cachedVoice == nil)
+    try expect(migrated.voices.first?.name == voice.name)
+    try expect(migrated.voices.first?.files == ["Voices/old/reference.wav"])
+    try expect(migrated.takes.first?.references == ["Voices/old/reference.wav"])
+    try expect(migrated.takes.first?.id == library.takes.first?.id)
+}
+
 }

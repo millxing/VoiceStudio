@@ -35,7 +35,7 @@ final class SpeechEngine {
         let logging = try? FileHandle(forWritingTo: log)
         logHandle = logging
         proc.executableURL = URL(fileURLWithPath: python)
-        proc.arguments = ["-u", script.path, device, modelFolder]
+        proc.arguments = ["-B", "-u", script.path, device, modelFolder]
         var env = ProcessInfo.processInfo.environment
         env["PYTHONUNBUFFERED"] = "1"
         env["TOKENIZERS_PARALLELISM"] = "false"

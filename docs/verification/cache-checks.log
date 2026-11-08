@@ -1,0 +1,14 @@
+Building for debugging...
+[1 / 1]
+[2 / 6] VoiceStudioChecks-product
+[5 / 8] VoiceStudioChecks-product
+/Users/robschoen/Dropbox/CC/tts/VoiceStudio/Package.swift: VoiceStudioChecks-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/usr/lib' not found
+/Users/robschoen/Dropbox/CC/tts/VoiceStudio/Package.swift: VoiceStudioChecks-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/Library/Frameworks' not found
+[7 / 8] VoiceStudioChecks-product
+Build complete! (0.67 sec)
+PASS 21 library checks
+........
+----------------------------------------------------------------------
+Ran 8 tests in 0.014s
+
+OK

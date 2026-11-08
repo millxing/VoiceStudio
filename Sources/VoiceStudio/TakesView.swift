@@ -71,6 +71,7 @@ struct TakeDetail: View {
                     }
                     Grid(alignment: .leading, horizontalSpacing: Space.xl, verticalSpacing: Space.sm) {
                         metadata("Voice", take.voiceName)
+                        metadata("Voice source", take.cachedVoice != nil ? "Imported XTTS cache" : (take.references.isEmpty ? "Built-in voice" : "Reference audio"))
                         metadata("Language", Languages.name(take.language))
                         metadata("Speed", String(format: "%.2f×", take.speed))
                         metadata("Model", take.modelName)

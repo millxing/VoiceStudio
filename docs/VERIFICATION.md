@@ -5,7 +5,36 @@ M4 Max / 64 GB. Swift 6 language mode. No Swift source warnings. The installed
 CLT emits linker warnings about missing Xcode framework search paths; documented
 in README. No system toolchain files were changed.
 
-## Automated results
+## Cached voice importer update
+
+- Current `tools/check.sh`: **21 library checks and 8 Python tests passed**.
+  These include schema-one migration with original IDs/reference paths intact,
+  cache persistence, Coqui and legacy formats, speaker-bank selection, bad
+  dimensions/NaN/empty values, large checkpoints, and a pickle payload that is
+  rejected without executing its command.
+- `tools/cache-integration.sh`: **22 native integration checks passed**. Real
+  XTTS tensors were imported as a Coqui cache and as a two-speaker bank; the
+  selected speaker generated four MPS takes without any original recording.
+  Playback, export, persistence, model reuse, and active cancellation passed.
+- The reference-audio integration suite still passes all **17 checks**.
+- App signature verification (`codesign --verify --deep --strict`) passed after
+  cached import/generation. Python child processes use `-B`, so module imports
+  cannot write bytecode into the signed application bundle.
+- Add Voice's audio/cache source picker, cached-voice detail, Edit Cached Voice,
+  reference-voice rows, and take source metadata were inspected in light/dark
+  active-window screenshots. Grid lint and layout probes passed. The initial
+  attempt targeted the main window while its edit sheet was key; the corrected
+  targeted sheet captures are in `cache-import-screenshots/`.
+- No real-user cache file was supplied. Fixtures used public XTTS conditioning
+  tensors and nonexistent original-audio paths to verify independence from the
+  recordings; actual likeness with the user's files still needs listening review.
+- Existing manual microphone, external menu/hover and accessibility checks below
+  remain manual. This feature adds no icon-only toolbar control.
+
+See `verification/cache-*.log` and `cache-import-screenshots/` for evidence.
+
+## Initial release automated results
+
 
 - `tools/check.sh`: 12 Foundation library checks passed, plus 2 Python chunking
   tests covering sentence boundaries, long unbroken input, CJK, emoji, empty

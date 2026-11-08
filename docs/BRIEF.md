@@ -12,7 +12,7 @@ xtts2-ui's Gradio interface. Existing benchmark proves MPS inference on this M4 
 
 ## Data
 - Script: ID, title, text, creation date.
-- Voice: ID, name, local reference files, creation date.
+- Voice: ID, name, local reference files or imported XTTS cache, creation date.
 - Take: ID, script snapshot, voice snapshot, language, speed, seed, audio path, status, duration, date, error.
 - Preferences: device, model folder, runtime interpreter, autoplay, generation controls.
 

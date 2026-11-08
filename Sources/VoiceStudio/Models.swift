@@ -174,11 +174,29 @@ final class AppModel {
                 files.append(file)
             }
         }
-        voice.name = cleaned; voice.files = files
+        voice.name = cleaned; voice.files = files; voice.cachedFile = nil
         if let i = library.voices.firstIndex(where: { $0.id == voice.id }) { library.voices[i] = voice }
         else { library.voices.append(voice) }
         selectedVoice = voice.id; preferences.voice = "clone:\(voice.id.uuidString)"
         sidebar = .voices
+    }
+    func storeCachedVoice(name: String, source: URL, entry: String, existing: VoiceReference?) async throws {
+        let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { throw LibraryFile.failure("Give the voice a name.") }
+        var voice = existing ?? VoiceReference(name: cleaned, files: [])
+        let file = "Voices/\(voice.id.uuidString)/\(UUID().uuidString).pth"
+        let destination = Store.root.appending(path: file)
+        do {
+            try await CachedVoiceImport.convert(source, entry: entry, destination: destination, python: preferences.python)
+            try Task.checkCancellation()
+        } catch {
+            try? FileManager.default.removeItem(at: destination)
+            throw error
+        }
+        voice.name = cleaned; voice.files = []; voice.cachedFile = file
+        if let index = library.voices.firstIndex(where: { $0.id == voice.id }) { library.voices[index] = voice }
+        else { library.voices.append(voice) }
+        selectedVoice = voice.id; preferences.voice = "clone:\(voice.id.uuidString)"; sidebar = .voices
     }
     func removeVoice(_ voice: VoiceReference, undo: UndoManager?) {
         library.voices.removeAll { $0.id == voice.id }; selectedVoice = nil
@@ -192,8 +210,9 @@ final class AppModel {
         let documents = scripts.filter { (all || selectedScripts.contains($0.id)) && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         guard !documents.isEmpty else { message = "Write or import a script before generating speech."; return }
         var speaker = "", references = [String](), name = ""
+        var cachedVoice: String?
         if preferences.voice.hasPrefix("clone:"), let voice = voices.first(where: { "clone:\($0.id.uuidString)" == preferences.voice }) {
-            references = voice.files; name = voice.name
+            references = voice.files; name = voice.name; cachedVoice = voice.cachedFile
         } else if preferences.voice.hasPrefix("builtin:") {
             speaker = String(preferences.voice.dropFirst(8)); name = speaker
         } else { message = "Choose a voice before generating speech."; return }
@@ -202,7 +221,7 @@ final class AppModel {
             for n in 1...max(1, min(20, preferences.takes)) {
                 let take = SpeechTake(script: script, voiceName: name, speaker: speaker, references: references,
                     language: preferences.language, speed: preferences.speed, seed: Int.random(in: 1...Int(Int32.max)),
-                    modelFolder: preferences.modelFolder, device: preferences.device, number: last + n)
+                    modelFolder: preferences.modelFolder, device: preferences.device, number: last + n, cachedVoice: cachedVoice)
                 library.takes.append(take)
                 if selectedTake == nil { selectedTake = take.id }
             }
@@ -237,6 +256,7 @@ final class AppModel {
         do {
             try engine.send(["command": "generate", "id": take.id.uuidString, "text": take.text,
                 "speaker": take.speaker, "references": take.references.map { Store.root.appending(path: $0).path },
+                "cached_voice": take.cachedVoice.map { Store.root.appending(path: $0).path } ?? "",
                 "language": take.language, "speed": take.speed, "seed": take.seed,
                 "output": Store.root.appending(path: take.audioFile).path])
         } catch { handle(["event": "error", "id": take.id.uuidString, "message": error.localizedDescription]) }
@@ -286,7 +306,7 @@ final class AppModel {
         let script = ScriptDocument(title: take.title, text: take.text)
         var copy = SpeechTake(script: script, voiceName: take.voiceName, speaker: take.speaker, references: take.references,
             language: take.language, speed: take.speed, seed: take.seed, modelFolder: take.modelFolder, device: take.device,
-            number: (library.takes.filter { $0.scriptID == take.scriptID }.map(\.number).max() ?? 0) + 1)
+            number: (library.takes.filter { $0.scriptID == take.scriptID }.map(\.number).max() ?? 0) + 1, cachedVoice: take.cachedVoice)
         copy.scriptID = take.scriptID
         library.takes.append(copy); selectedTake = copy.id
         if queueRunning { batchTotal += 1 } else { resumeQueue() }

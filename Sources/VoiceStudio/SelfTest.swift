@@ -38,6 +38,20 @@ enum SelfTest {
                     try model.storeVoice(name: "Test narrator", urls: [sample, sample], existing: nil)
                     check("Voice copies multiple references", model.voices.last?.files.count == 2)
                 }
+                if let fixture = ProcessInfo.processInfo.environment["APP_CACHE_FIXTURE"] {
+                    let source = URL(fileURLWithPath: fixture)
+                    let entries = try await CachedVoiceImport.inspect(source, python: model.preferences.python)
+                    check("Inspect a Coqui cached voice without loading the speech model", entries.count == 1)
+                    try await model.storeCachedVoice(name: "Imported cache", source: source, entry: entries[0].id, existing: nil)
+                    check("Cached voice is copied into the library without reference audio", model.voices.last?.cachedFile != nil && model.voices.last?.files.isEmpty == true)
+                    if let bank = ProcessInfo.processInfo.environment["APP_CACHE_BANK"] {
+                        let bankURL = URL(fileURLWithPath: bank)
+                        let speakers = try await CachedVoiceImport.inspect(bankURL, python: model.preferences.python)
+                        check("Speaker bank presents both saved speakers", speakers.map(\.id).sorted() == ["Narrator A", "Narrator B"])
+                        try await model.storeCachedVoice(name: "Imported bank speaker", source: bankURL, entry: "Narrator B", existing: nil)
+                        check("Selected bank speaker survives saving and reopening", try LibraryFile.load(from: Store.url).voices.last?.cachedFile == model.voices.last?.cachedFile)
+                    }
+                }
                 if CommandLine.arguments.contains("--integration") {
                     // Exercise the same queue and worker the UI uses, with distinct seeds.
                     let longText = "This is a local speech test. The studio is ready to tell a new story. " + String(repeating: "Outside, the city was beginning to wake up, and somewhere in the distance a train was passing. ", count: 4)
@@ -49,6 +63,9 @@ enum SelfTest {
                     model.queue()
                     model.updateScript(id, text: "Changed after enqueue.")
                     let pending = model.library.takes
+                    if ProcessInfo.processInfo.environment["APP_CACHE_FIXTURE"] != nil {
+                        check("Queued takes retain cached voice snapshots", pending.allSatisfy { $0.cachedVoice != nil && $0.references.isEmpty })
+                    }
                     check("Two scripts × two takes have distinct seeds and immutable text", pending.count == 4 && Set(pending.map(\.seed)).count == 4 && pending.allSatisfy { !$0.text.contains("Changed") })
                     let deadline = Date().addingTimeInterval(180)
                     while model.queueRunning && Date() < deadline { try await Task.sleep(for: .milliseconds(200)) }

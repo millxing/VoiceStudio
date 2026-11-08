@@ -1,0 +1,7 @@
+/Users/robschoen/Dropbox/CC/tts/VoiceStudio/Package.swift: VoiceStudioKit: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/Library/Frameworks' not found
+/Users/robschoen/Dropbox/CC/tts/VoiceStudio/Package.swift: VoiceStudioChecks-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/usr/lib' not found
+/Users/robschoen/Dropbox/CC/tts/VoiceStudio/Package.swift: VoiceStudioChecks-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/Library/Frameworks' not found
+/Users/robschoen/Dropbox/CC/tts/VoiceStudio/Package.swift: VoiceStudio-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/usr/lib' not found
+/Users/robschoen/Dropbox/CC/tts/VoiceStudio/Package.swift: VoiceStudio-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/Library/Frameworks' not found
+Build complete! (6.39 sec)
+installed /Applications/VoiceStudio.app (signed: -)

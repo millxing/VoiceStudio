@@ -22,6 +22,30 @@ than generating another take with the already-loaded model.
 5. In **Takes**, listen, seek, compare, **Export Take…** as WAV, or reveal it in
    Finder. Every take keeps its text, voice, model, speed, language, and seed.
 
+### Import a saved XTTS voice (.pth)
+
+In **Voices → Add Voice**, choose **Cached Voice (.pth)**, then
+**Import Cached Voice…**. Select your saved voice file. If it contains multiple
+speakers (such as `speakers_xtts.pth`), choose **Saved speaker**, give the voice a
+name, and save it. Repeat for another speaker from the same file if needed.
+
+The original reference recordings are not required. A cached voice contains
+conditioning data rather than playable audio; generate a take to preview it.
+Use the same XTTS model/checkpoint as the app that created the cache for the
+closest results. VoiceStudio stores a validated local copy and leaves your
+original file untouched; moving the original afterward is harmless.
+
+Supported files include Coqui's `gpt_conditioning_latents` + `speaker_embedding`
+cache, older `gpt_cond_latent` / `gpt_cond_latents` dictionaries, tensor pairs, and
+named speaker banks. Loading uses PyTorch's restricted `weights_only=True` mode.
+Unsupported pickle objects, other models, invalid tensor shapes/values, and model
+checkpoints are rejected with an explanation. Full model files belong in
+Settings > Engine, not the voice importer.
+
+Existing version-one libraries upgrade automatically to version two while
+retaining scripts, reference voices, and takes. Older app versions will reject
+the upgraded library rather than dropping the new cached-voice fields.
+
 **Stop Queue** cancels the current and queued work; completed takes stay saved.
 A failed/canceled take can be retried as a new take with the same settings and
 seed. Interrupted jobs become failed at next launch, and queued work can resume.
@@ -80,6 +104,7 @@ first version does not automatically purge unused source audio.
 tools/check.sh        # Foundation library checks + worker chunk-boundary tests
 tools/selftest.sh     # native app actions against /tmp storage
 tools/integration.sh  # real multi-script, multiple-take MPS voice cloning
+tools/cache-integration.sh # saved-cache import, bank selection, and GPU generation
 tools/snap.sh        # every main page, voice sheet and Settings, light/dark
 tools/grid-lint.sh
 swift tools/check-layout.swift /tmp/VoiceStudio-shots/*-layout.json

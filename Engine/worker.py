@@ -108,7 +108,16 @@ def run():
             started = time.perf_counter()
             with torch.inference_mode():
                 refs = request.get("references", [])
-                if refs:
+                cached_voice = request.get("cached_voice")
+                if cached_voice:
+                    from voice_cache import load_voice
+                    key = "cache:" + hashlib.sha256(Path(cached_voice).read_bytes()).hexdigest()
+                    if key not in conditioning:
+                        if len(conditioning) >= 16:
+                            conditioning.pop(next(iter(conditioning)))
+                        conditioning[key] = load_voice(cached_voice)
+                    latent, embedding = conditioning[key]
+                elif refs:
                     fingerprint = hashlib.sha256()
                     for filename in refs:
                         p = Path(filename)
@@ -168,7 +177,15 @@ def run():
 if __name__ == "__main__":
     try:
         with contextlib.redirect_stdout(sys.stderr):
-            run()
+            if len(sys.argv) > 1 and sys.argv[1] == "--inspect-cache":
+                from voice_cache import cache_entries
+                emit("cache", entries=cache_entries(sys.argv[2]))
+            elif len(sys.argv) > 1 and sys.argv[1] == "--convert-cache":
+                from voice_cache import convert_voice
+                convert_voice(sys.argv[2], sys.argv[3], sys.argv[4])
+                emit("converted")
+            else:
+                run()
     except Exception as error:
         traceback.print_exc()
         emit("fatal", message=str(error))

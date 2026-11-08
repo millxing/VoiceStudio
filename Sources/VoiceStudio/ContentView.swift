@@ -185,7 +185,7 @@ struct VoiceList: View {
         List(model.voices, selection: $model.selectedVoice) { voice in
             VStack(alignment: .leading, spacing: Space.xs) {
                 Label(voice.name, systemImage: "person.wave.2").lineLimit(1).help(voice.name)
-                Text("\(voice.files.count) reference \(voice.files.count == 1 ? "clip" : "clips")").font(.caption).foregroundStyle(.secondary)
+                Text(voice.cachedFile == nil ? "\(voice.files.count) reference \(voice.files.count == 1 ? "clip" : "clips")" : "Imported XTTS cache").font(.caption).foregroundStyle(.secondary)
             }.padding(.vertical, Space.xs).tag(voice.id)
                 .contextMenu {
                     Button("Edit Voice…") { model.editingVoice = voice; model.showingVoiceSheet = true }
@@ -213,9 +213,9 @@ struct VoiceDetail: View {
                 VStack(alignment: .leading, spacing: Space.xl) {
                     VStack(alignment: .leading, spacing: Space.sm) {
                         Text(voice.name).font(.title2).textSelection(.enabled)
-                        Text("Cloned voice · \(voice.files.count) reference \(voice.files.count == 1 ? "clip" : "clips")").foregroundStyle(.secondary)
+                        Text(voice.cachedFile == nil ? "Cloned voice · \(voice.files.count) reference \(voice.files.count == 1 ? "clip" : "clips")" : "Cloned voice · imported XTTS cache").foregroundStyle(.secondary)
                     }.gridProbe("voice-title", area: "voice-page")
-                    Text("Use clean speech with a single speaker and little background noise. Around 6–15 seconds per clip is a useful starting point.")
+                    Text(voice.cachedFile == nil ? "Use clean speech with a single speaker and little background noise. Around 6–15 seconds per clip is a useful starting point." : "This voice uses saved XTTS conditioning. The original reference recordings are not required. Generate a take to preview it.")
                         .foregroundStyle(.secondary).gridProbe("voice-guidance", area: "voice-page")
                     VStack(alignment: .leading, spacing: Space.lg) {
                         ForEach(Array(voice.files.enumerated()), id: \.offset) { index, file in

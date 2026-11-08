@@ -11,8 +11,9 @@ public struct VoiceReference: Identifiable, Codable, Hashable, Sendable {
     public var id = UUID()
     public var name: String
     public var files: [String]
+    public var cachedFile: String?
     public var createdAt = Date()
-    public init(name: String, files: [String]) { self.name = name; self.files = files }
+    public init(name: String, files: [String], cachedFile: String? = nil) { self.name = name; self.files = files; self.cachedFile = cachedFile }
 }
 public enum TakeStatus: String, Codable, Sendable, CaseIterable {
     case queued, running, completed, failed, canceled
@@ -35,6 +36,7 @@ public struct SpeechTake: Identifiable, Codable, Hashable, Sendable {
     public var voiceName: String
     public var speaker: String
     public var references: [String]
+    public var cachedVoice: String?
     public var language: String
     public var speed: Double
     public var seed: Int
@@ -49,9 +51,9 @@ public struct SpeechTake: Identifiable, Codable, Hashable, Sendable {
     public var audioFile: String
     public var error = ""
     public init(script: ScriptDocument, voiceName: String, speaker: String, references: [String], language: String,
-                speed: Double, seed: Int, modelFolder: String, device: String, number: Int) {
+                speed: Double, seed: Int, modelFolder: String, device: String, number: Int, cachedVoice: String? = nil) {
         self.id = UUID(); self.scriptID = script.id; self.title = script.title; self.text = script.text
-        self.voiceName = voiceName; self.speaker = speaker; self.references = references
+        self.voiceName = voiceName; self.speaker = speaker; self.references = references; self.cachedVoice = cachedVoice
         self.language = language; self.speed = speed; self.seed = seed; self.modelFolder = modelFolder
         self.modelName = modelFolder.isEmpty ? "XTTS-v2" : URL(fileURLWithPath: modelFolder).lastPathComponent
         self.device = device; self.number = number; self.createdAt = Date(); self.status = .queued
@@ -60,7 +62,7 @@ public struct SpeechTake: Identifiable, Codable, Hashable, Sendable {
     public var displayTitle: String { "\(title) · Take \(number)" }
 }
 public struct StudioLibrary: Codable, Equatable, Sendable {
-    public var schemaVersion = 1
+    public var schemaVersion = 2
     public var scripts: [ScriptDocument] = []
     public var voices: [VoiceReference] = []
     public var takes: [SpeechTake] = []
@@ -75,10 +77,11 @@ public struct StudioLibrary: Codable, Equatable, Sendable {
 public enum LibraryFile {
     public static func load(from url: URL) throws -> StudioLibrary {
         guard FileManager.default.fileExists(atPath: url.path) else { return StudioLibrary() }
-        let result = try JSONDecoder().decode(StudioLibrary.self, from: Data(contentsOf: url))
-        guard result.schemaVersion == 1 else {
+        var result = try JSONDecoder().decode(StudioLibrary.self, from: Data(contentsOf: url))
+        guard [1, 2].contains(result.schemaVersion) else {
             throw NSError(domain: "VoiceStudio", code: 1, userInfo: [NSLocalizedDescriptionKey: "This library was created by a newer VoiceStudio version."])
         }
+        result.schemaVersion = 2
         return result
     }
     public static func save(_ library: StudioLibrary, to url: URL) throws {

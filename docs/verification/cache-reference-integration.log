@@ -1,0 +1,18 @@
+PASS New Script selects a retained document
+PASS Multiple text imports select both documents
+PASS Library survives reopening
+PASS Removing scripts can be undone
+PASS Voice copies multiple references
+PASS Two scripts × two takes have distinct seeds and immutable text
+PASS Native app generates cloned voice takes on MPS
+PASS Generated WAV opens and playback timer advances
+PASS Native playback pauses
+PASS Native playback resumes
+PASS Export copies the correct audio
+PASS Metadata and completed audio survive reopen
+PASS Queue starts another take without reloading the model
+PASS Stop Queue cancels active generation
+PASS Valid symbol: doc.text
+PASS Valid symbol: person.wave.2
+PASS Valid symbol: waveform
+SELFTEST PASS 17 checks

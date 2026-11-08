@@ -1,0 +1,62 @@
+{
+  "probes" : [
+    {
+      "area" : "voice-page",
+      "height" : 185.079833984375,
+      "inset" : 20,
+      "kind" : "area",
+      "name" : "voice-page",
+      "width" : 948,
+      "x" : 589,
+      "y" : 52
+    },
+    {
+      "area" : "voice-page",
+      "edge" : "lead",
+      "height" : 45,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "voice-title",
+      "width" : 221,
+      "x" : 609,
+      "y" : 72
+    },
+    {
+      "area" : "voice-page",
+      "edge" : "lead",
+      "height" : 16,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "voice-guidance",
+      "width" : 741,
+      "x" : 609,
+      "y" : 137
+    },
+    {
+      "area" : "voice-page",
+      "edge" : "lead",
+      "height" : 0,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "voice-clips",
+      "width" : 0,
+      "x" : 609,
+      "y" : 173
+    },
+    {
+      "area" : "voice-page",
+      "edge" : "lead",
+      "height" : 24.079833984375,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "voice-actions",
+      "width" : 241,
+      "x" : 609,
+      "y" : 193
+    }
+  ],
+  "window" : {
+    "height" : 820,
+    "width" : 1537
+  }
+}

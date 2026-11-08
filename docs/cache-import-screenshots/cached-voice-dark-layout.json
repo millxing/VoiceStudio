@@ -1,0 +1,137 @@
+{
+  "probes" : [
+    {
+      "area" : "voice-page",
+      "height" : 185.079833984375,
+      "inset" : 20,
+      "kind" : "area",
+      "name" : "voice-page",
+      "width" : 948,
+      "x" : 589,
+      "y" : 52
+    },
+    {
+      "area" : "voice-page",
+      "edge" : "lead",
+      "height" : 45,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "voice-title",
+      "width" : 221,
+      "x" : 609,
+      "y" : 72
+    },
+    {
+      "area" : "voice-page",
+      "edge" : "lead",
+      "height" : 16,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "voice-guidance",
+      "width" : 741,
+      "x" : 609,
+      "y" : 137
+    },
+    {
+      "area" : "voice-page",
+      "edge" : "lead",
+      "height" : 0,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "voice-clips",
+      "width" : 0,
+      "x" : 609,
+      "y" : 173
+    },
+    {
+      "area" : "voice-page",
+      "edge" : "lead",
+      "height" : 24.079833984375,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "voice-actions",
+      "width" : 241,
+      "x" : 609,
+      "y" : 193
+    },
+    {
+      "area" : "voice-sheet",
+      "height" : 346.15966796875,
+      "inset" : 20,
+      "kind" : "area",
+      "name" : "voice-sheet",
+      "width" : 640,
+      "x" : 0,
+      "y" : 0.420166015625
+    },
+    {
+      "area" : "voice-sheet",
+      "edge" : "lead",
+      "height" : 21,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "sheet-title",
+      "width" : 76,
+      "x" : 20,
+      "y" : 20.420166015625
+    },
+    {
+      "area" : "voice-sheet",
+      "edge" : "lead",
+      "height" : 24,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "sheet-name",
+      "width" : 600,
+      "x" : 20,
+      "y" : 61.420166015625
+    },
+    {
+      "area" : "voice-sheet",
+      "edge" : "lead",
+      "height" : 24,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "sheet-source",
+      "width" : 370,
+      "x" : 20,
+      "y" : 105.420166015625
+    },
+    {
+      "area" : "voice-sheet",
+      "edge" : "lead",
+      "height" : 32,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "sheet-guidance",
+      "width" : 597,
+      "x" : 20,
+      "y" : 149.420166015625
+    },
+    {
+      "area" : "voice-sheet",
+      "edge" : "lead",
+      "height" : 81.15966796875,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "sheet-references",
+      "width" : 473,
+      "x" : 20,
+      "y" : 201.420166015625
+    },
+    {
+      "area" : "voice-sheet",
+      "height" : 24,
+      "inset" : 0,
+      "kind" : "probe",
+      "name" : "sheet-actions",
+      "width" : 600,
+      "x" : 20,
+      "y" : 302.579833984375
+    }
+  ],
+  "window" : {
+    "height" : 820,
+    "width" : 1537
+  }
+}

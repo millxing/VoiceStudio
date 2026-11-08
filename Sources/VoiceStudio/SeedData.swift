@@ -17,6 +17,15 @@ enum SeedData {
             try? model.storeVoice(name: "Narrator", urls: [sample], existing: nil)
             model.selectedVoice = model.voices.first?.id
         }
+        if let fixture = ProcessInfo.processInfo.environment["APP_CACHE_FIXTURE"] {
+            let file = "Voices/ImportedNarrator.pth"
+            let target = Store.root.appending(path: file)
+            do {
+                try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try FileManager.default.copyItem(at: URL(fileURLWithPath: fixture), to: target)
+                model.library.voices.append(VoiceReference(name: "Imported narrator", files: [], cachedFile: file))
+            } catch { model.message = "Unable to seed cached voice: \(error.localizedDescription)" }
+        }
         model.preferences.voice = "builtin:Craig Gutsy"
         model.sidebar = .scripts
         for index in 1...3 {
