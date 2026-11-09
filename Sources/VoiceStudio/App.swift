@@ -111,7 +111,24 @@ struct VoiceStudioApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var model: AppModel?
     private var quittingAfterInstallation = false
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Self-tests run as a background app: no Dock icon, no menu bar, and macOS does not
+        // bring it forward at launch, so the person at the Mac keeps their focus.
+        guard SelfTest.requested else { return }
+        NSApp.setActivationPolicy(.accessory)
+        // SwiftUI still activates the app when it presents the window. Hand focus straight back
+        // to whatever the person was using, every time.
+        let previous = NSWorkspace.shared.frontmostApplication
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                guard let previous, !previous.isTerminated else { NSApp.deactivate(); return }
+                NSApp.yieldActivation(to: previous)
+                previous.activate()
+            }
+        }
+    }
     func applicationDidFinishLaunching(_ notification: Notification) {
+        guard !SelfTest.requested else { return }
         NSApp.setActivationPolicy(.regular); NSApp.activate()
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

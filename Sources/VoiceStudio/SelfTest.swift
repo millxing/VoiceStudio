@@ -216,6 +216,94 @@ enum SelfTest {
         check("Muting every track leaves nothing to export", (try? model.exportTimeline(.wav, to: wav)) == nil)
         model.setTrack(0, muted: false, undo: undo); model.setTrack(1, muted: false, undo: undo)
         check("The timeline survives reopening", try LibraryFile.load(from: Store.url).timeline == model.timeline)
+        try await gestureChecks(model, take: made[0])
+    }
+
+    /// Clicks and drags on the real timeline with synthetic mouse events sent to the window.
+    /// The cursor never moves and the app never comes forward, so the person at the Mac keeps working.
+    static func gestureChecks(_ model: AppModel, take: SpeechTake) async throws {
+        guard let window = NSApp.windows.first(where: { $0.canBecomeMain && !$0.isSheet }) else {
+            check("Editor gestures need the main window", false); return
+        }
+        model.playback.stop()
+        var timeline = Timeline()
+        let id = timeline.add(takeID: take.id, duration: 2, track: 0, at: 1).id
+        model.setTimeline(timeline, action: "Gesture Test", undo: nil)
+        model.zoom = 100; model.playhead = 0; model.selectedClip = nil; model.sidebar = .editor
+        try await Task.sleep(for: .milliseconds(800))
+        let pps = model.zoom
+        func clip() -> TimelineClip? { model.timeline.clips.first { $0.id == id } }
+        /// A point on the canvas for a timeline time and a lane (or the ruler, lane -1), in window coordinates.
+        func point(_ time: Double, lane: Int) -> CGPoint {
+            let y = lane < 0 ? EditorMetrics.ruler / 2 : EditorMetrics.ruler + (CGFloat(lane) + 0.5) * EditorMetrics.lane
+            return CGPoint(x: EditorProbe.canvas.minX + time * pps, y: EditorProbe.canvas.minY + y)
+        }
+        func near(_ a: Double?, _ b: Double, _ slack: Double = 0.03) -> Bool { a.map { abs($0 - b) <= slack } ?? false }
+
+        acceptFirstMouse(in: window)
+        await click(point(1.5, lane: 0), in: window)
+        check("Clicking a clip selects it", model.selectedClip == id)
+        await drag(from: point(1.5, lane: 0), to: point(2.5, lane: 0), in: window)
+        check("Dragging a clip moves it along its track", near(clip()?.start, 2) && clip()?.track == 0)
+        await drag(from: point(3, lane: 0), to: point(3, lane: 1), in: window)
+        check("Dragging a clip down moves it to the next track", clip()?.track == 1 && near(clip()?.start, 2))
+        await drag(from: point(2, lane: 1).applying(.init(translationX: 3, y: 0)), to: point(2.5, lane: 1).applying(.init(translationX: 3, y: 0)), in: window)
+        check("Dragging a clip's left edge trims its start", near(clip()?.start, 2.5) && near(clip()?.inPoint, 0.5) && near(clip()?.outPoint, 2))
+        await drag(from: point(4, lane: 1).applying(.init(translationX: -3, y: 0)), to: point(3.5, lane: 1).applying(.init(translationX: -3, y: 0)), in: window)
+        check("Dragging a clip's right edge trims its end", near(clip()?.outPoint, 1.5) && near(clip()?.start, 2.5))
+        window.undoManager?.undo()
+        check("A trim is one undo step", near(clip()?.outPoint, 2) && near(clip()?.inPoint, 0.5))
+        await drag(from: point(3, lane: 1), to: point(0.55, lane: 1), in: window)
+        check("A clip dropped near the start snaps to it", clip()?.start == 0)
+        await click(point(1.25, lane: -1), in: window)
+        check("Clicking the ruler moves the playhead", near(model.playhead, 1.25))
+        await click(point(6, lane: 2), in: window)
+        check("Clicking an empty track clears the selection", model.selectedClip == nil)
+        try await Task.sleep(for: .milliseconds(300))
+        check("Gesture checks never bring the app forward", !NSApp.isActive)
+    }
+    /// An inactive app's window treats a click as "bring me forward" and drops it, unless the clicked view
+    /// accepts the first mouse. The self-test never activates the app, so every view under the editor
+    /// accepts it for the rest of this test process.
+    static func acceptFirstMouse(in window: NSWindow) {
+        let selector = #selector(NSView.acceptsFirstMouse(for:))
+        let yes: @convention(block) (NSView, NSEvent?) -> Bool = { _, _ in true }
+        let imp = imp_implementationWithBlock(yes)
+        guard let method = class_getInstanceMethod(NSView.self, selector) else { return }
+        var classes = Set<ObjectIdentifier>()
+        func visit(_ view: NSView) {
+            if classes.insert(ObjectIdentifier(type(of: view))).inserted {
+                class_replaceMethod(type(of: view), selector, imp, method_getTypeEncoding(method))
+            }
+            view.subviews.forEach(visit)
+        }
+        if let root = window.contentView { visit(root) }
+    }
+    static func mouse(_ type: NSEvent.EventType, at point: CGPoint, in window: NSWindow) {
+        let height = window.contentView?.frame.height ?? window.frame.height
+        guard let event = NSEvent.mouseEvent(with: type, location: NSPoint(x: point.x, y: height - point.y), modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil,
+            eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1) else { return }
+        // Posted to this app's own queue, so the event loop dispatches it as it would a real click
+        // (and closes the undo group after it). The system cursor never moves.
+        NSApp.postEvent(event, atStart: false)
+    }
+    static func click(_ point: CGPoint, in window: NSWindow) async {
+        mouse(.leftMouseDown, at: point, in: window)
+        try? await Task.sleep(for: .milliseconds(30))
+        mouse(.leftMouseUp, at: point, in: window)
+        try? await Task.sleep(for: .milliseconds(250))
+    }
+    static func drag(from start: CGPoint, to end: CGPoint, in window: NSWindow) async {
+        mouse(.leftMouseDown, at: start, in: window)
+        try? await Task.sleep(for: .milliseconds(30))
+        for step in 1...12 {
+            let f = CGFloat(step) / 12
+            mouse(.leftMouseDragged, at: CGPoint(x: start.x + (end.x - start.x) * f, y: start.y + (end.y - start.y) * f), in: window)
+            try? await Task.sleep(for: .milliseconds(16))
+        }
+        mouse(.leftMouseUp, at: end, in: window)
+        try? await Task.sleep(for: .milliseconds(250))
     }
     static func finish(code: Int32) {
         exitCode = code

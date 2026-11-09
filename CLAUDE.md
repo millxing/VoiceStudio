@@ -17,6 +17,7 @@ Codable JSON library and no server.
 - Build and install: `./build.sh`. Add `--open` to restart the app with the new build. The build shows warnings; fix them.
 - Library and worker checks: `tools/check.sh`. This CLT lacks the Swift Testing/XCTest runtime.
 - Self-test (the app's real functions on a /tmp store): `tools/selftest.sh`. Build with `VOICE_TEST_REFERENCE=../results/mps-reference-1.wav ./build.sh` first; without a bundled reference the voice check fails. Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
+- Keep the user's focus. The self-test runs as a background app and hands focus back if SwiftUI activates it; never add `activate`, `makeKeyAndOrderFront`, `CGEvent.post`, or computer use to a test that a self-test event can do. Mouse gestures: `SelfTest.gestureChecks` posts `NSEvent`s to the app's own queue (`click`, `drag`) and aims with `EditorProbe.canvas`. Only `tools/snap.sh` takes focus; tell the user before running it and limit it with `APP_SNAPSHOT_PAGES`.
 - After every UI change, take snapshots with sample data and look at them: `tools/snap.sh`.
   It writes `/tmp/VoiceStudio-shots/<page>-light.png` and `-dark.png` for every sidebar page, and `settings-<tab>-light.png` and `-dark.png` for every Settings tab, then quits. `APP_SNAPSHOT_PAGES=all,settings tools/snap.sh` limits the pages.
   For a panel, sheet, or popover, add a capture to `Snapshot.swift` like the Settings loop.

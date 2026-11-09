@@ -16,6 +16,11 @@ enum EditorMetrics {
     static var height: CGFloat { ruler + lane * CGFloat(Timeline.trackCount) }
 }
 
+/// Where the timeline canvas sits in its window (top-left origin), so the self-test can aim mouse events at clips.
+enum EditorProbe {
+    static var canvas: CGRect = .zero
+}
+
 /// The content column: completed takes, ready to drag onto the timeline.
 struct EditorBin: View {
     @Environment(AppModel.self) private var model
@@ -86,6 +91,7 @@ struct EditorDetail: View {
                         canvas(shown)
                             .frame(width: max(geometry.size.width, (shown.duration + EditorMetrics.tail) * model.zoom),
                                    height: EditorMetrics.height, alignment: .topLeading)
+                            .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { EditorProbe.canvas = $0 }
                     }
                 }
             }
