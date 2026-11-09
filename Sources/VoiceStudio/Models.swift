@@ -35,6 +35,7 @@ struct StudioPreferences: Codable, Equatable {
     var takes = 1
     var autoplay = false
     var takesFolder: String?
+    var exportFolder: String?
 }
 @Observable
 final class AppModel {
@@ -63,7 +64,9 @@ final class AppModel {
     var zoom = 40.0
     var waveforms: [UUID: [Float]] = [:]
     @ObservationIgnored var sampleCache: [UUID: [Float]] = [:]
-    @ObservationIgnored var timelineRender: URL?
+    var timelineRender: URL?
+    var timelinePlaybackOrigin = 0.0
+    var timelineRevealRequest = UUID()
     @ObservationIgnored private var saveEnabled = false
     @ObservationIgnored private var canWrite = true
     @ObservationIgnored private var startingJob: SpeechTake?
@@ -377,9 +380,11 @@ final class AppModel {
     }
     func export(_ take: SpeechTake) {
         let panel = NSSavePanel(); panel.allowedContentTypes = [.wav]
+        try? FileManager.default.createDirectory(at: exportFolder, withIntermediateDirectories: true)
+        panel.directoryURL = exportFolder
         panel.nameFieldStringValue = "\(take.title.replacingOccurrences(of: "/", with: "-"))-clip-\(take.number).wav"
         guard panel.runModal() == .OK, let destination = panel.url else { return }
-        do { try copyTake(take, to: destination) }
+        do { try copyTake(take, to: destination); preferences.exportFolder = destination.deletingLastPathComponent().path }
         catch { message = "Unable to export audio: \(error.localizedDescription)" }
     }
     func copyTake(_ take: SpeechTake, to destination: URL) throws {

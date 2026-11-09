@@ -197,7 +197,7 @@ enum SelfTest {
         check("Ripple delete closes the gap on its track", model.timeline.clips(on: 0).first.map { abs($0.start) < 0.001 && abs($0.inPoint - 1) < 0.001 } == true)
         ripple.undo()
         check("Editor changes can be undone", model.timeline.clips.count == 3)
-        model.playback.loops = true
+        model.setTimelineLoopEnabled(true, undo: nil)
         model.toggleTimelinePlayback()
         try await Task.sleep(for: .milliseconds(300))
         check("Timeline preview plays with looping", model.isPlayingTimeline && model.playback.isPlaying && model.timelineTime > 0)
@@ -211,6 +211,7 @@ enum SelfTest {
         model.toggleTimelinePlayback()
         check("Timeline preview pauses", !model.playback.isPlaying)
         model.playback.stop(); model.playback.loops = false
+        model.setTimelineLoopEnabled(false, undo: nil)
         let wav = Store.root.appending(path: "Timeline.wav")
         try model.exportTimeline(.wav, to: wav)
         check("Export mixes every track into one WAV", abs(try AudioValidation.validate(wav) - model.timeline.duration) < 0.01)
@@ -245,7 +246,53 @@ enum SelfTest {
             check("External MP3 imports and decodes", model.importAudio([mp3], track: 2, undo: nil))
         }
         check("Unsupported external files are rejected", !model.importAudio([Store.root.appending(path: "Import.txt")], undo: nil))
+        try await documentAndLoopChecks(model)
         try await gestureChecks(model, take: made[0])
+    }
+
+    static func documentAndLoopChecks(_ model: AppModel) async throws {
+        model.setLoopMarker(start: true, time: 0.5, undo: nil)
+        model.setLoopMarker(start: false, time: 0.9, undo: nil)
+        model.setTimelineLoopEnabled(true, undo: nil)
+        model.seekTimeline(0)
+        model.toggleTimelinePlayback()
+        check("Loop playback renders just the marker range", abs(model.playback.duration - 0.4) < 0.01
+            && abs(model.timelinePlaybackOrigin - 0.5) < 0.001 && model.playback.loops)
+        try await Task.sleep(for: .milliseconds(1100))
+        check("Playback stays between markers across multiple wraps", model.playback.isPlaying && (0.5..<0.9).contains(model.timelineTime))
+        model.seekTimeline(0)
+        check("Reset outside the loop stops preview and restores zero", !model.playback.isPlaying && model.timelineTime == 0)
+        let saved = model.timeline
+        let mixed = model.mixdown()
+        let url = Store.root.appending(path: "Saved.vstimeline")
+        try model.saveTimeline(to: url)
+        let document = try JSONDecoder().decode(TimelineDocument.self, from: Data(contentsOf: url))
+        check("Saved timelines embed each distinct source once", document.sources.count == Set(saved.clips.map(\.takeID)).count)
+        let sourceCount = model.library.takes.count
+        try model.loadTimeline(from: url, undo: nil)
+        check("Reopening a local timeline reuses its source clips", model.library.takes.count == sourceCount)
+        model.clearTimeline(undo: nil)
+        // Remove the originals from the library: loading must depend entirely on the saved file.
+        let sourceIDs = Set(saved.clips.map(\.takeID))
+        let originalSources = model.library.takes.filter { sourceIDs.contains($0.id) }
+        defer { model.library.takes.append(contentsOf: originalSources) }
+        model.library.takes.removeAll { sourceIDs.contains($0.id) }
+        let undo = UndoManager()
+        try model.loadTimeline(from: url, undo: undo)
+        check("Load restores clip positions and trims", model.timeline.clips.map { [$0.start, $0.inPoint, $0.outPoint, Double($0.track)] }
+            == saved.clips.map { [$0.start, $0.inPoint, $0.outPoint, Double($0.track)] })
+        check("Load restores track levels and loop markers", model.timeline.tracks == saved.tracks && model.timeline.loop == saved.loop)
+        let restored = model.mixdown()
+        check("Loaded timeline plays without original source entries", restored.count == mixed.count
+            && zip(restored, mixed).allSatisfy { abs($0 - $1) < 0.0002 })
+        undo.undo()
+        check("Loading a timeline is undoable", model.timeline.isEmpty)
+        undo.redo()
+        check("Loading a timeline supports redo", model.timeline.clips.count == saved.clips.count)
+        let before = model.library
+        try Data("{invalid".utf8).write(to: url)
+        check("Invalid timeline leaves the current arrangement intact", (try? model.loadTimeline(from: url, undo: nil)) == nil && model.library == before)
+        model.setTimelineLoopEnabled(false, undo: nil)
     }
 
     /// Clicks and drags on the real timeline with synthetic mouse events sent to the window.
@@ -308,6 +355,8 @@ enum SelfTest {
             try await Task.sleep(for: .milliseconds(100))
             check("Native Paste inserts at the playhead", model.timeline.clips.count == 2 && near(model.clip?.start, 5))
             window.undoManager?.undo()
+            model.seekTimeline(0)
+            try await Task.sleep(for: .milliseconds(200))
             await click(point(0.75, lane: 1), in: window)
             keyboard.cut(nil)
             try await Task.sleep(for: .milliseconds(100))
@@ -330,6 +379,31 @@ enum SelfTest {
         check("Clicking an empty track clears the selection", model.selectedClip == nil)
         try await Task.sleep(for: .milliseconds(300))
         check("Gesture checks never bring the app forward", !NSApp.isActive)
+        model.setLoopMarker(start: false, time: 1.5, undo: nil)
+        try await Task.sleep(for: .milliseconds(200))
+        let loopY = EditorProbe.canvas.minY + EditorMetrics.loopHeight / 2
+        await drag(from: CGPoint(x: EditorProbe.canvas.minX + 8, y: loopY),
+                   to: CGPoint(x: EditorProbe.canvas.minX + 30, y: loopY), in: window)
+        check("Dragging the loop start moves its marker", model.timeline.loop.map { abs($0.start - 0.3) < 0.03 } == true)
+        window.undoManager?.undo()
+        check("Moving a loop marker is one undo step", model.timeline.loop?.start == 0)
+        if let scroll = EditorProbe.scrollView {
+            scroll.contentView.scroll(to: CGPoint(x: 400, y: 0))
+            scroll.reflectScrolledClipView(scroll.contentView)
+            try await Task.sleep(for: .milliseconds(200))
+            check("Reset regression starts with the beginning offscreen", EditorProbe.canvas.minX < EditorProbe.viewport.minX - 100)
+            model.seekTimeline(0)
+            try await Task.sleep(for: .milliseconds(300))
+            check("Reset reveals the rendered playhead", EditorProbe.playhead.intersects(EditorProbe.viewport))
+            scroll.contentView.scroll(to: CGPoint(x: 400, y: 0))
+            scroll.reflectScrolledClipView(scroll.contentView)
+            model.seekTimeline(0)
+            try await Task.sleep(for: .milliseconds(300))
+            check("Repeated reset at zero also reveals the playhead", EditorProbe.playhead.intersects(EditorProbe.viewport))
+            model.clearTimeline(undo: nil)
+            try await Task.sleep(for: .milliseconds(300))
+            check("Clearing the timeline keeps the playhead visible at zero", model.timelineTime == 0 && EditorProbe.playhead.intersects(EditorProbe.viewport))
+        } else { check("Reset regression locates the actual scroll view", false) }
     }
     /// An inactive app's window treats a click as "bring me forward" and drops it, unless the clicked view
     /// accepts the first mouse. The self-test never activates the app, so every view under the editor

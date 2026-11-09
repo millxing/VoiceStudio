@@ -4,7 +4,8 @@ import VoiceStudioKit
 
 /// Editor sizes. Lanes are tall enough for a readable waveform under the clip title.
 enum EditorMetrics {
-    static let ruler: CGFloat = 28
+    static let loopHeight: CGFloat = 20
+    static let ruler: CGFloat = 48
     static let lane: CGFloat = 88
     static let headerWidth: CGFloat = 168
     static let handle: CGFloat = 8
@@ -20,6 +21,9 @@ enum EditorMetrics {
 /// Where the timeline canvas sits in its window (top-left origin), so the self-test can aim mouse events at clips.
 enum EditorProbe {
     static var canvas: CGRect = .zero
+    static var viewport: CGRect = .zero
+    static var playhead: CGRect = .zero
+    static weak var scrollView: NSScrollView?
 }
 
 /// The content column: completed takes, ready to drag onto the timeline.
@@ -79,6 +83,7 @@ struct EditorDetail: View {
     @State private var dragBase: Timeline?
     @State private var dragDuplicate: UUID?
     @State private var focusRequest: UUID?
+    @State private var scrollPosition = ScrollPosition(x: 0)
 
     var body: some View {
         let shown = draft ?? model.timeline
@@ -95,7 +100,13 @@ struct EditorDetail: View {
                             .frame(width: max(geometry.size.width, (shown.duration + EditorMetrics.tail) * model.zoom),
                                    height: EditorMetrics.height, alignment: .topLeading)
                             .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { EditorProbe.canvas = $0 }
+                            .background(TimelineScrollProbe())
                     }
+                    .scrollPosition($scrollPosition)
+                    .onChange(of: model.timelineRevealRequest) {
+                        scrollPosition.scrollTo(x: max(0, model.timelineTime * model.zoom - geometry.size.width / 4))
+                    }
+                    .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { EditorProbe.viewport = $0 }
                 }
             }
             .frame(height: EditorMetrics.height)
@@ -153,11 +164,12 @@ struct EditorDetail: View {
         return ZStack(alignment: .topLeading) {
             VStack(spacing: 0) {
                 TimelineRuler(pixelsPerSecond: pps)
-                    .frame(height: EditorMetrics.ruler)
+                    .frame(height: EditorMetrics.ruler - EditorMetrics.loopHeight)
+                    .padding(.top, EditorMetrics.loopHeight)
                     .contentShape(Rectangle())
                     .gesture(DragGesture(minimumDistance: 0).onChanged { value in
                         focusRequest = UUID()
-                        model.seekTimeline(value.location.x / pps)
+                        model.seekTimeline(value.location.x / pps, reveal: false)
                     })
                     .overlay(alignment: .bottom) { Divider() }
                 ForEach(0..<Timeline.trackCount, id: \.self) { index in
@@ -171,7 +183,7 @@ struct EditorDetail: View {
             .onTapGesture { location in
                 focusRequest = UUID()
                 model.selectedClip = nil
-                model.seekTimeline(location.x / pps)
+                model.seekTimeline(location.x / pps, reveal: false)
             }
             if shown.isEmpty {
                 ContentUnavailableView("Drag Clips Here", systemImage: "square.and.arrow.down",
@@ -187,15 +199,16 @@ struct EditorDetail: View {
                     .offset(x: clip.start * pps, // grid: ok timeline time-to-x placement
                             y: EditorMetrics.ruler + CGFloat(clip.track) * EditorMetrics.lane + EditorMetrics.clipInset) // grid: ok timeline coordinates
             }
+            loopMarkers(shown, pps: pps)
             Playhead(pixelsPerSecond: pps)
             // A visible grab handle uses the canvas coordinates, even when scrolled.
             Image(systemName: "arrowtriangle.down.fill")
                 .foregroundStyle(Palette.accent)
-                .frame(width: 16, height: EditorMetrics.ruler)
+                .frame(width: 16, height: EditorMetrics.ruler - EditorMetrics.loopHeight)
                 .contentShape(Rectangle())
-                .offset(x: model.timelineTime * pps - 8) // grid: ok timeline time-to-x placement
+                .offset(x: max(0, model.timelineTime * pps - 8), y: EditorMetrics.loopHeight) // grid: ok timeline time-to-x placement
                 .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("timeline"))
-                    .onChanged { value in focusRequest = UUID(); model.seekTimeline(value.location.x / pps) })
+                    .onChanged { value in focusRequest = UUID(); model.seekTimeline(value.location.x / pps, reveal: false) })
                 .help("Drag to scrub the timeline")
                 .accessibilityLabel("Playhead")
         }
@@ -235,6 +248,43 @@ struct EditorDetail: View {
                 }
             }
             return !sources.isEmpty
+        }
+    }
+
+    @ViewBuilder private func loopMarkers(_ shown: Timeline, pps: Double) -> some View {
+        if let range = shown.loopRange {
+            Rectangle().fill(Palette.accent.opacity(shown.loop?.enabled == true ? 0.25 : 0.08))
+                .frame(width: (range.upperBound - range.lowerBound) * pps, height: EditorMetrics.loopHeight)
+                .overlay {
+                    if (range.upperBound - range.lowerBound) * pps >= 64 {
+                        Text("Loop").font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
+                .offset(x: range.lowerBound * pps) // grid: ok timeline time-to-x placement
+                .allowsHitTesting(false)
+            ForEach([true, false], id: \.self) { leading in
+                let time = leading ? range.lowerBound : range.upperBound
+                Image(systemName: leading ? "arrowtriangle.right.fill" : "arrowtriangle.left.fill")
+                    .font(.caption).foregroundStyle(Palette.accent)
+                    .frame(width: 16, height: EditorMetrics.loopHeight)
+                    .background(.regularMaterial)
+                    .contentShape(Rectangle()).pointerStyle(.columnResize)
+                    .offset(x: max(0, time * pps - 8)) // grid: ok timeline time-to-x placement
+                    .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .named("timeline"))
+                        .onChanged { value in
+                            if dragBase == nil { dragBase = model.timeline; focusRequest = UUID() }
+                            var next = dragBase ?? model.timeline
+                            next.setLoopMarker(start: leading, time: value.location.x / pps)
+                            draft = next
+                        }
+                        .onEnded { _ in
+                            let resume = model.isPlayingTimeline && model.playback.isPlaying
+                            commit("Move Loop Marker")
+                            if resume { model.toggleTimelinePlayback() }
+                        })
+                    .help(leading ? "Drag the loop start marker" : "Drag the loop end marker")
+                    .accessibilityLabel(leading ? "Loop start" : "Loop end")
+            }
         }
     }
 
@@ -335,8 +385,9 @@ struct EditorTransport: View {
                 .labelStyle(.iconOnly).disabled(empty).help("Play or pause the timeline (Space)")
             Button("Go to Start", systemImage: "backward.end.fill") { model.seekTimeline(0) }
                 .labelStyle(.iconOnly).help("Move the playhead to the start")
-            Toggle("Loop", systemImage: "repeat", isOn: Binding(get: { playback.loops }, set: { playback.loops = $0 }))
-                .toggleStyle(.button).labelStyle(.iconOnly).help(playback.loops ? "Looping is on (Command-L)" : "Loop playback (Command-L)")
+            Toggle("Loop", systemImage: "repeat", isOn: Binding(get: { model.timelineLoopEnabled }, set: { model.setTimelineLoopEnabled($0, undo: undo) }))
+                .toggleStyle(.button).labelStyle(.iconOnly).disabled(empty)
+                .help(model.timelineLoopEnabled ? "Repeat between the loop markers (Command-L)" : "Enable the loop markers (Command-L)")
             Text("\(preciseTimeLabel(model.timelineTime)) / \(preciseTimeLabel(model.timeline.duration))")
                 .font(.callout).monospacedDigit().foregroundStyle(.secondary)
             Spacer(minLength: Space.md)
@@ -351,6 +402,15 @@ struct EditorTransport: View {
                 Button("Zoom In", systemImage: "plus.magnifyingglass") { model.zoom(by: 1.5) }
                     .labelStyle(.iconOnly).buttonStyle(.borderless).help("Zoom in (Command-Plus)")
             }
+            Menu("Timeline") {
+                Button("Save Timeline…") { model.saveTimeline() }
+                Button("Load Timeline…") { model.loadTimeline(undo: undo) }
+                Divider()
+                Button("Set Loop Start at Playhead") { model.setLoopMarker(start: true, time: model.timelineTime, undo: undo) }
+                    .disabled(empty)
+                Button("Set Loop End at Playhead") { model.setLoopMarker(start: false, time: model.timelineTime, undo: undo) }
+                    .disabled(empty)
+            }.fixedSize().help("Save or load an editable timeline, or position loop markers")
             Menu("Export", systemImage: "square.and.arrow.up") {
                 Button("Export as WAV…") { model.exportTimeline(.wav) }
                 Button("Export as MP3…") { model.exportTimeline(.mp3) }
@@ -396,7 +456,8 @@ struct Playhead: View {
     var body: some View {
         Rectangle().fill(Palette.accent)
             .frame(width: 2, height: EditorMetrics.height)
-            .offset(x: model.timelineTime * pixelsPerSecond - 1) // grid: ok timeline time-to-x placement
+            .offset(x: max(1, model.timelineTime * pixelsPerSecond - 1)) // grid: ok timeline time-to-x placement
+            .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { EditorProbe.playhead = $0 }
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
@@ -451,5 +512,13 @@ struct Waveform: Shape {
             x += 1
         }
         return path
+    }
+}
+
+/// Exposes the real scroll viewport for the rendered reset regression check.
+struct TimelineScrollProbe: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { NSView() }
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async { [weak view] in EditorProbe.scrollView = view?.enclosingScrollView }
     }
 }

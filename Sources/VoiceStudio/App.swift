@@ -73,7 +73,9 @@ struct VoiceStudioApp: App {
                     if menu.inEditor { model.toggleTimelinePlayback() } else if let take = model.take { model.play(take) }
                 }
                 .keyboardShortcut("p", modifiers: [.command, .option]).disabled(menu.inEditor ? !menu.hasTimeline : !menu.canPlay)
-                Toggle("Loop Playback", isOn: Binding(get: { model.playback.loops }, set: { model.playback.loops = $0 }))
+                Toggle("Loop Playback", isOn: Binding(
+                    get: { menu.inEditor ? model.timelineLoopEnabled : model.playback.loops },
+                    set: { if menu.inEditor { model.setTimelineLoopEnabled($0, undo: NSApp.keyWindow?.undoManager) } else { model.playback.loops = $0 } }))
                     .keyboardShortcut("l")
                 Divider()
                 Button("Export Clip…") { if let take = model.take { model.export(take) } }
@@ -82,6 +84,9 @@ struct VoiceStudioApp: App {
                     .keyboardShortcut("r", modifiers: [.command, .shift]).disabled(!menu.canPlay)
             }
             CommandMenu("Editor") {
+                Button("Save Timeline…") { model.saveTimeline() }.keyboardShortcut("s", modifiers: [.command, .shift])
+                Button("Load Timeline…") { model.loadTimeline(undo: NSApp.keyWindow?.undoManager) }.keyboardShortcut("o", modifiers: [.command, .shift])
+                Divider()
                 Button("Add Selected Clip to Timeline") { if let take = model.take { model.addToTimeline(take, track: 0, undo: NSApp.keyWindow?.undoManager) } }
                     .keyboardShortcut("a", modifiers: [.command, .shift]).disabled(!menu.canAddTake)
                 Divider()

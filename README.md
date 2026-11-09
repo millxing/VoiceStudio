@@ -141,7 +141,21 @@ choose **File > Import Audio Clips…**. Imported audio is copied into the libra
 Drag the playhead handle or ruler to scrub. Select a timeline clip, then use
 **Command-X/C/V** to cut/copy/paste; paste places it at the playhead on its original
 track. **Option-drag** duplicates a clip. **Delete** removes it; **Shift-Delete**
-also closes the gap. These timeline edits support Undo.
+also closes the gap by moving later clips on that track left. For example,
+ripple-deleting a two-second clip moves later clips two seconds earlier.
+These timeline edits support Undo.
+
+Use **Timeline > Save Timeline…** and **Load Timeline…** to keep separate
+arrangements as `.vstimeline` files. Each file includes its source audio, clip
+positions and trims, track levels, and loop markers. Loading replaces the
+current arrangement and can be undone. Save/load and audio export dialogs share
+the remembered export folder; choose it in **Settings > Storage > Exports and
+Timelines**.
+
+Drag the two markers in the strip above the ruler to set a loop range, then
+turn on **Loop** (Command-L) to repeat that range. The Timeline menu can also
+set either marker at the playhead. **Go to Start** brings time zero back into
+view even after scrolling to a later part of the timeline.
 
 
 ## Build and verify

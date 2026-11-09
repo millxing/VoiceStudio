@@ -99,6 +99,12 @@ struct StorageSettings: View {
                 .font(.caption).foregroundStyle(.secondary)
             if !error.isEmpty { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary) }
         }
+        Section("Exports and Timelines") {
+            LabeledContent("Folder") { Text(model.exportFolder.path).textSelection(.enabled).lineLimit(3) }
+            Button("Choose Export Folder…") { model.chooseExportFolder() }
+            Text("Audio exports and saved timelines start in this folder. Saved timelines include their source audio.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
         Section("Library") {
             LabeledContent("Location") { Text(Store.root.path).textSelection(.enabled).lineLimit(3) }
             Button("Show Library in Finder") { NSWorkspace.shared.open(Store.root) }

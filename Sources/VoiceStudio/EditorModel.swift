@@ -16,7 +16,7 @@ extension AppModel {
     var clip: TimelineClip? { timeline.clips.first { $0.id == selectedClip } }
     var isPlayingTimeline: Bool { timelineRender != nil && playback.url == timelineRender }
     /// The playhead, following playback while the timeline plays.
-    var timelineTime: Double { isPlayingTimeline ? playback.position : playhead }
+    var timelineTime: Double { max(0, isPlayingTimeline ? playback.position + timelinePlaybackOrigin : playhead) }
     static let zoomRange = 10.0...400.0
 
     func takeFor(_ clip: TimelineClip) -> SpeechTake? { library.takes.first { $0.id == clip.takeID } }
@@ -38,7 +38,7 @@ extension AppModel {
     }
     /// A rendered preview no longer matches the arrangement. Stop it so nothing stale plays.
     private func timelineChanged() {
-        if isPlayingTimeline { playhead = playback.position; playback.stop() }
+        if isPlayingTimeline { playhead = timelineTime; playback.stop() }
         if let timelineRender { try? FileManager.default.removeItem(at: timelineRender) }
         timelineRender = nil
         loadWaveforms()
@@ -139,8 +139,8 @@ extension AppModel {
         editTimeline(ripple ? "Ripple Delete" : "Delete Clip", undo: undo) { ripple ? $0.rippleRemove([id]) : $0.remove([id]) }
     }
     func clearTimeline(undo: UndoManager?) {
-        editTimeline("Clear Timeline", undo: undo) { $0.clips.removeAll() }
-        playhead = 0
+        editTimeline("Clear Timeline", undo: undo) { $0.clips.removeAll(); $0.loop = nil }
+        seekTimeline(0)
     }
     func setTrack(_ index: Int, muted: Bool? = nil, volume: Double? = nil, undo: UndoManager?) {
         editTimeline(muted != nil ? (muted! ? "Mute Track" : "Unmute Track") : "Change Volume", undo: undo) {
@@ -148,24 +148,60 @@ extension AppModel {
             if let volume { $0.tracks[index].volume = volume }
         }
     }
-    func seekTimeline(_ time: Double) {
+    func seekTimeline(_ time: Double, reveal: Bool = true) {
         playhead = max(0, time)
-        if isPlayingTimeline { playback.seek(min(playhead, playback.duration)) }
+        if isPlayingTimeline {
+            let local = playhead - timelinePlaybackOrigin
+            if local < 0 || local > playback.duration { playback.stop() }
+            else { playback.seek(local) }
+        }
+        if reveal { timelineRevealRequest = UUID() }
     }
     func zoom(by factor: Double) { zoom = min(max(zoom * factor, Self.zoomRange.lowerBound), Self.zoomRange.upperBound) }
+
+    var timelineLoopEnabled: Bool { timeline.loop?.enabled == true }
+    func setTimelineLoopEnabled(_ enabled: Bool, undo: UndoManager?) {
+        guard enabled != timelineLoopEnabled, let range = timeline.loopRange else { return }
+        let resume = isPlayingTimeline && playback.isPlaying
+        editTimeline("Change Loop", undo: undo) {
+            $0.loop = TimelineLoop(start: range.lowerBound, end: range.upperBound, enabled: enabled)
+        }
+        if resume { toggleTimelinePlayback() }
+    }
+    func setLoopMarker(start: Bool, time: Double, undo: UndoManager?) {
+        guard timeline.loopRange != nil else { return }
+        editTimeline("Move Loop Marker", undo: undo) { $0.setLoopMarker(start: start, time: time) }
+    }
 
     func toggleTimelinePlayback() {
         guard !timeline.isEmpty else { return }
         if isPlayingTimeline {
-            if playback.isPlaying { playback.toggle(); playhead = playback.position }
-            else { playback.seek(playhead); playback.toggle() }
+            if playback.isPlaying { playhead = timelineTime; playback.toggle() }
+            else {
+                let local = playhead - timelinePlaybackOrigin
+                playback.seek(local >= 0 && local < playback.duration ? local : 0)
+                playback.toggle()
+            }
             return
         }
         do {
+            var samples = mixdown()
+            timelinePlaybackOrigin = 0
+            if timelineLoopEnabled, let range = timeline.loopRange {
+                let first = Int((range.lowerBound * TimelineAudio.sampleRate).rounded())
+                let last = min(samples.count, Int((range.upperBound * TimelineAudio.sampleRate).rounded()))
+                samples = Array(samples[first..<last])
+                timelinePlaybackOrigin = Double(first) / TimelineAudio.sampleRate
+            }
             let url = FileManager.default.temporaryDirectory.appending(path: "VoiceStudio-timeline-\(UUID().uuidString).wav")
-            try TimelineAudio.writeWAV(mixdown(), to: url)
+            try TimelineAudio.writeWAV(samples, to: url)
+            if let old = timelineRender { try? FileManager.default.removeItem(at: old) }
             timelineRender = url
-            try playback.start(url, at: playhead >= timeline.duration ? 0 : playhead)
+            playback.loops = timelineLoopEnabled
+            let local = playhead - timelinePlaybackOrigin
+            let duration = Double(samples.count) / TimelineAudio.sampleRate
+            try playback.start(url, at: local >= 0 && local < duration ? local : 0)
+            timelineRevealRequest = UUID()
         } catch { message = "Unable to play the timeline: \(error.localizedDescription)" }
     }
 
@@ -174,9 +210,11 @@ extension AppModel {
         let panel = NSSavePanel()
         panel.title = "Export Timeline as \(format.title)"
         panel.allowedContentTypes = [format.type]
+        try? FileManager.default.createDirectory(at: exportFolder, withIntermediateDirectories: true)
+        panel.directoryURL = exportFolder
         panel.nameFieldStringValue = "Timeline.\(format.rawValue)"
         guard panel.runModal() == .OK, let destination = panel.url else { return }
-        do { try exportTimeline(format, to: destination) }
+        do { try exportTimeline(format, to: destination); preferences.exportFolder = destination.deletingLastPathComponent().path }
         catch { message = "Unable to export the timeline: \(error.localizedDescription)" }
     }
     func exportTimeline(_ format: ExportFormat, to destination: URL) throws {

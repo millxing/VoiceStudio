@@ -24,17 +24,42 @@ public struct TimelineTrack: Codable, Hashable, Sendable {
     public init() {}
 }
 
+/// The range repeated during timeline playback. Saved with the arrangement.
+public struct TimelineLoop: Codable, Equatable, Sendable {
+    public var start: Double
+    public var end: Double
+    public var enabled: Bool
+    public init(start: Double, end: Double, enabled: Bool = true) {
+        self.start = start; self.end = end; self.enabled = enabled
+    }
+}
+
 /// The editor's arrangement: up to three tracks of clips that mix down on export.
 public struct Timeline: Codable, Equatable, Sendable {
     public static let trackCount = 3
     /// Shortest clip a trim or split may leave behind.
     public static let minimumLength = 0.05
     public var clips: [TimelineClip] = []
+    public var loop: TimelineLoop?
     public var tracks = Array(repeating: TimelineTrack(), count: Timeline.trackCount)
     public init() {}
 
     public var duration: Double { clips.map(\.end).max() ?? 0 }
     public var isEmpty: Bool { clips.isEmpty }
+    /// Clamps saved markers when the arrangement becomes shorter.
+    public var loopRange: Range<Double>? {
+        guard duration >= Self.minimumLength else { return nil }
+        let start = min(max(0, loop?.start ?? 0), duration - Self.minimumLength)
+        let end = min(duration, max(start + Self.minimumLength, loop?.end ?? duration))
+        return start..<end
+    }
+    public mutating func setLoopMarker(start: Bool, time: Double) {
+        guard let range = loopRange else { return }
+        loop = TimelineLoop(
+            start: start ? min(max(0, time), range.upperBound - Self.minimumLength) : range.lowerBound,
+            end: start ? range.upperBound : min(duration, max(time, range.lowerBound + Self.minimumLength)),
+            enabled: loop?.enabled ?? false)
+    }
     public func clips(on track: Int) -> [TimelineClip] { clips.filter { $0.track == track }.sorted { $0.start < $1.start } }
     public func end(of track: Int) -> Double { clips(on: track).map(\.end).max() ?? 0 }
 
