@@ -4,7 +4,7 @@ import SwiftUI
 
 /// One accent color in three shades. Everything else is Apple's look.
 /// People pick the accent in Settings > Appearance (AppearanceSettings.swift).
-/// Light and dark mode follow the Mac: there is no app-specific mode setting.
+/// Appearance can follow the Mac or use a saved light/dark override.
 ///   APP_ACCENT=mint VoiceStudio     run with another accent, to compare
 struct Theme: Identifiable, Hashable {
     struct Shades: Hashable {
@@ -45,6 +45,18 @@ struct Theme: Identifiable, Hashable {
     ]
 }
 
+enum AppearanceMode: String, CaseIterable, Identifiable {
+    case system, light, dark
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+    var colorScheme: ColorScheme? {
+        switch self { case .system: nil; case .light: .light; case .dark: .dark }
+    }
+    var appearance: NSAppearance? {
+        switch self { case .system: nil; case .light: NSAppearance(named: .aqua); case .dark: NSAppearance(named: .darkAqua) }
+    }
+}
+
 /// The chosen accent, saved in UserDefaults. Views that read `theme` redraw
 /// when it changes.
 @Observable
@@ -61,8 +73,14 @@ final class ThemeStore {
     /// Theme(id: "brand", name: "Brand", shades: .init(light: 0x8EEBC4, base: 0x2BC48A, deep: 0x0F7A55), darkText: true)
     static let brand: Theme? = nil
 
+    var mode: AppearanceMode {
+        didSet {
+            if !Store.isOverridden { UserDefaults.standard.set(mode.rawValue, forKey: "appearance.mode") }
+            NSApplication.shared.appearance = mode.appearance
+        }
+    }
     var themeID: String {
-        didSet { UserDefaults.standard.set(themeID, forKey: "appearance.accent") }
+        didSet { if !Store.isOverridden { UserDefaults.standard.set(themeID, forKey: "appearance.accent") } }
     }
 
     /// True while the Mac's accent is Multicolor.
@@ -77,8 +95,11 @@ final class ThemeStore {
     }
 
     private init() {
+        mode = AppearanceMode(rawValue: ProcessInfo.processInfo.environment["APP_APPEARANCE"]
+            ?? (Store.isOverridden ? "system" : UserDefaults.standard.string(forKey: "appearance.mode") ?? "system")) ?? .system
         themeID = ProcessInfo.processInfo.environment["APP_ACCENT"]
             ?? UserDefaults.standard.string(forKey: "appearance.accent") ?? Self.defaultID
+        NSApplication.shared.appearance = mode.appearance
         NotificationCenter.default.addObserver(forName: NSColor.systemColorsDidChangeNotification,
                                                object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.macIsMulticolor = ThemeStore.readMulticolor() }
@@ -109,7 +130,7 @@ private struct Themed: ViewModifier {
     private var store = ThemeStore.shared
 
     func body(content: Content) -> some View {
-        content.tint(store.theme.tint)
+        content.tint(store.theme.tint).preferredColorScheme(store.mode.colorScheme)
     }
 }
 

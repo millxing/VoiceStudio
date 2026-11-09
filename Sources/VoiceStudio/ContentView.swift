@@ -13,8 +13,13 @@ struct ContentView: View {
                     Label(page.title, systemImage: page.symbol).tag(page)
                 }
                 VStack(alignment: .leading, spacing: Space.sm) {
-                    Label(model.engine.status, systemImage: model.engine.isReady ? "circle.fill" : "circle")
-                        .font(.caption).foregroundStyle(.secondary)
+                    HStack(spacing: Space.sm) {
+                        Label(model.engine.status, systemImage: model.engine.isReady ? "circle.fill" : "circle")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Spacer(minLength: Space.sm)
+                        SettingsLink { Image(systemName: "gearshape") }
+                            .buttonStyle(.plain).help("Settings (Command-,)").accessibilityLabel("Settings")
+                    }
                     if model.queueRunning {
                         ProgressView(value: Double(model.completedInBatch), total: Double(max(1, model.batchTotal)))
                         Text("\(model.completedInBatch) of \(model.batchTotal) takes finished").font(.caption).foregroundStyle(.secondary)

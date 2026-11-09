@@ -34,6 +34,7 @@ struct StudioPreferences: Codable, Equatable {
     var speed = 1.0
     var takes = 1
     var autoplay = false
+    var takesFolder: String?
 }
 @Observable
 final class AppModel {
@@ -208,8 +209,37 @@ final class AppModel {
         undo?.registerUndo(withTarget: self) { model in model.library.voices.append(voice) }
         undo?.setActionName("Remove Voice")
     }
+    var takesFolder: URL {
+        preferences.takesFolder.map { URL(fileURLWithPath: $0, isDirectory: true) } ?? Store.root.appending(path: "Audio", directoryHint: .isDirectory)
+    }
+    func setTakesFolder(_ folder: URL?) throws {
+        guard !queueRunning else { throw LibraryFile.failure("Stop the queue before changing the takes folder.") }
+        if let folder { try validateTakesFolder(folder) }
+        preferences.takesFolder = folder?.standardizedFileURL.path
+    }
+    private func validateTakesFolder(_ folder: URL) throws {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw LibraryFile.failure("The takes folder is unavailable. Reconnect the drive or choose a folder in Settings > Storage.")
+        }
+        let probe = folder.appending(path: ".VoiceStudio-\(UUID().uuidString).tmp")
+        do {
+            try Data().write(to: probe, options: .atomic)
+            try FileManager.default.removeItem(at: probe)
+        } catch { throw LibraryFile.failure("VoiceStudio cannot write to this takes folder. Choose another folder in Settings > Storage.") }
+    }
+    private func prepareTakeStorage() -> Bool {
+        do {
+            if preferences.takesFolder == nil { try FileManager.default.createDirectory(at: takesFolder, withIntermediateDirectories: true) }
+            try validateTakesFolder(takesFolder)
+            return true
+        } catch { message = error.localizedDescription; return false }
+    }
+    private func setOutputLocation(_ take: inout SpeechTake) {
+        if preferences.takesFolder != nil { take.audioFile = takesFolder.appending(path: "\(take.id.uuidString).wav").path }
+    }
     func queue(all: Bool = false) {
-        guard canWrite else { return }
+        guard canWrite, prepareTakeStorage() else { return }
         let documents = scripts.filter { (all || selectedScripts.contains($0.id)) && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         guard !documents.isEmpty else { message = "Write or import a script before generating speech."; return }
         var speaker = "", references = [String](), name = ""
@@ -222,9 +252,10 @@ final class AppModel {
         for script in documents {
             let last = library.takes.filter { $0.scriptID == script.id }.map(\.number).max() ?? 0
             for n in 1...max(1, min(20, preferences.takes)) {
-                let take = SpeechTake(script: script, voiceName: name, speaker: speaker, references: references,
+                var take = SpeechTake(script: script, voiceName: name, speaker: speaker, references: references,
                     language: preferences.language, speed: preferences.speed, seed: Int.random(in: 1...Int(Int32.max)),
                     modelFolder: preferences.modelFolder, device: preferences.device, number: last + n, cachedVoice: cachedVoice)
+                setOutputLocation(&take)
                 library.takes.append(take)
                 if selectedTake == nil { selectedTake = take.id }
             }
@@ -268,11 +299,12 @@ final class AppModel {
         activeTake = take.id; progress = "Preparing \(take.displayTitle)…"
         mutateTake(take.id) { $0.status = .running; $0.error = "" }
         do {
+            if take.audioFile.hasPrefix("/") { try validateTakesFolder(take.audioURL(relativeTo: Store.root).deletingLastPathComponent()) }
             try engine.send(["command": "generate", "id": take.id.uuidString, "text": take.text,
                 "speaker": take.speaker, "references": take.references.map { Store.root.appending(path: $0).path },
                 "cached_voice": take.cachedVoice.map { Store.root.appending(path: $0).path } ?? "",
                 "language": take.language, "speed": take.speed, "seed": take.seed,
-                "output": Store.root.appending(path: take.audioFile).path])
+                "output": take.audioURL(relativeTo: Store.root).path])
         } catch { handle(["event": "error", "id": take.id.uuidString, "message": error.localizedDescription]) }
     }
     private func handle(_ event: [String: Any]) {
@@ -310,18 +342,19 @@ final class AppModel {
         for i in library.takes.indices where [.queued, .running].contains(library.takes[i].status) {
             let take = library.takes[i]
             library.takes[i].status = .canceled
-            try? FileManager.default.removeItem(at: Store.root.appending(path: take.audioFile).deletingPathExtension().appendingPathExtension("partial.wav"))
+            try? FileManager.default.removeItem(at: take.audioURL(relativeTo: Store.root).deletingPathExtension().appendingPathExtension("partial.wav"))
         }
         progress = "Queue stopped"
     }
     func retry(_ take: SpeechTake) {
-        guard ![.queued, .running].contains(take.status) else { return }
+        guard ![.queued, .running].contains(take.status), prepareTakeStorage() else { return }
         // A retry is a new take. Original audio/metadata remain immutable for the future editor.
         let script = ScriptDocument(title: take.title, text: take.text)
         var copy = SpeechTake(script: script, voiceName: take.voiceName, speaker: take.speaker, references: take.references,
             language: take.language, speed: take.speed, seed: take.seed, modelFolder: take.modelFolder, device: take.device,
             number: (library.takes.filter { $0.scriptID == take.scriptID }.map(\.number).max() ?? 0) + 1, cachedVoice: take.cachedVoice)
         copy.scriptID = take.scriptID
+        setOutputLocation(&copy)
         library.takes.append(copy); selectedTake = copy.id
         if queueRunning { batchTotal += 1 } else { resumeQueue() }
     }
@@ -332,7 +365,7 @@ final class AppModel {
         undo?.setActionName("Remove Take")
     }
     func play(_ take: SpeechTake) {
-        do { try playback.toggle(Store.root.appending(path: take.audioFile)) }
+        do { try playback.toggle(take.audioURL(relativeTo: Store.root)) }
         catch { message = "Unable to play this take: \(error.localizedDescription)" }
     }
     func export(_ take: SpeechTake) {
@@ -343,9 +376,9 @@ final class AppModel {
         catch { message = "Unable to export audio: \(error.localizedDescription)" }
     }
     func copyTake(_ take: SpeechTake, to destination: URL) throws {
-        try Data(contentsOf: Store.root.appending(path: take.audioFile)).write(to: destination, options: .atomic)
+        try Data(contentsOf: take.audioURL(relativeTo: Store.root)).write(to: destination, options: .atomic)
     }
-    func reveal(_ take: SpeechTake) { NSWorkspace.shared.activateFileViewerSelecting([Store.root.appending(path: take.audioFile)]) }
+    func reveal(_ take: SpeechTake) { NSWorkspace.shared.activateFileViewerSelecting([take.audioURL(relativeTo: Store.root)]) }
     func shutdown() {
         installer.cancel()
         queueRunning = false

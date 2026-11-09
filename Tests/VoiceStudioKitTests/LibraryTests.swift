@@ -80,7 +80,7 @@ static func testCachedVoiceCompatibility() throws {
     defer { try? FileManager.default.removeItem(at: oldURL) }
     try JSONSerialization.data(withJSONObject: old).write(to: oldURL)
     let migrated = try LibraryFile.load(from: oldURL)
-    try expect(migrated.schemaVersion == 2)
+    try expect(migrated.schemaVersion == 3)
     try expect(migrated.voices.first?.cachedFile == nil)
     try expect(migrated.takes.first?.cachedVoice == nil)
     try expect(migrated.voices.first?.name == voice.name)

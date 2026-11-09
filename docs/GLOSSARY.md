@@ -13,3 +13,5 @@
 | Reference audio | Speech recorded or imported to condition a cloned voice. |
 | Cached voice | Saved XTTS conditioning tensors imported from a .pth file; contains no playable recording. |
 | Saved speaker | One selectable voice inside a cached file that contains multiple speakers. |
+| Appearance | System, Light or Dark display mode for VoiceStudio's windows. |
+| Takes folder | Folder used for newly generated WAV files; existing takes retain their saved locations. |

@@ -31,7 +31,7 @@ enum SeedData {
         for index in 1...3 {
             var take = SpeechTake(script: samples[0], voiceName: "Craig Gutsy", speaker: "Craig Gutsy", references: [], language: "en", speed: 1, seed: 1234 + index, modelFolder: "", device: "mps", number: index)
             if let sample {
-                let target = Store.root.appending(path: take.audioFile)
+                let target = take.audioURL(relativeTo: Store.root)
                 try? FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try? FileManager.default.copyItem(at: sample, to: target)
                 take.status = .completed; take.duration = 9.505; take.generationSeconds = 1.67

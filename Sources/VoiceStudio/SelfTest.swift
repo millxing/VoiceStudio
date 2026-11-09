@@ -14,6 +14,35 @@ enum SelfTest {
         guard requested else { return }
         guard Store.isOverridden else { finish(code: 1); return }
         Task {
+            if CommandLine.arguments.contains("--settings-check") {
+                do {
+                    let folder = Store.root.deletingLastPathComponent().appending(path: "VoiceStudio-settings-output")
+                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    try model.setTakesFolder(folder)
+                    model.preferences.python = "/tmp/VoiceStudio-no-python"
+                    model.addScript()
+                    let script = model.selectedScript!
+                    model.updateScript(script.id, text: "A focused storage check.")
+                    model.queue()
+                    let take = model.library.takes.last!
+                    check("New takes retain the selected output folder", take.audioURL(relativeTo: Store.root).deletingLastPathComponent().standardizedFileURL.path == folder.standardizedFileURL.path)
+                    try Data("test audio bytes".utf8).write(to: take.audioURL(relativeTo: Store.root))
+                    let exported = folder.appending(path: "export-check.wav")
+                    try model.copyTake(take, to: exported)
+                    check("Export reads the selected takes folder", try Data(contentsOf: exported) == Data("test audio bytes".utf8))
+                    try model.setTakesFolder(nil)
+                    check("Changing the folder preserves existing take locations", take.audioURL(relativeTo: Store.root).deletingLastPathComponent().standardizedFileURL.path == folder.standardizedFileURL.path)
+                    let legacy = SpeechTake(script: script, voiceName: "Voice", speaker: "", references: [], language: "en", speed: 1, seed: 1, modelFolder: "", device: "cpu", number: 1)
+                    check("Existing relative audio paths still resolve inside the library", legacy.audioURL(relativeTo: Store.root) == Store.root.appending(path: legacy.audioFile))
+                    var older = StudioLibrary(); older.schemaVersion = 2; older.takes = [legacy]
+                    let migration = Store.root.appending(path: "migration-check.json")
+                    try LibraryFile.save(older, to: migration)
+                    check("Version-two libraries retain audio paths when upgraded", try LibraryFile.load(from: migration).takes.first?.audioFile == legacy.audioFile)
+                    let oldPreferences = try JSONEncoder().encode(StudioPreferences())
+                    check("Preferences without a takes folder decode", try JSONDecoder().decode(StudioPreferences.self, from: oldPreferences).takesFolder == nil)
+                } catch { check("Focused settings check: \(error.localizedDescription)", false) }
+                finish(code: failures == 0 ? 0 : 1); return
+            }
             if CommandLine.arguments.contains("--install-engine") {
                 // This account's explicit prior CPML consent is required by the test runner.
                 guard ProcessInfo.processInfo.environment["APP_TEST_CPML_ACCEPTED"] == "1" else { finish(code: 1); return }
@@ -102,17 +131,17 @@ enum SelfTest {
                     while model.queueRunning && Date() < deadline { try await Task.sleep(for: .milliseconds(200)) }
                     check("Native app generates cloned voice takes on MPS", model.library.takes.count == 4 && model.library.takes.allSatisfy { $0.status == .completed && $0.duration > 0 })
                     if let take = model.library.takes.first, take.status == .completed {
-                        try model.playback.toggle(Store.root.appending(path: take.audioFile))
+                        try model.playback.toggle(take.audioURL(relativeTo: Store.root))
                         try await Task.sleep(for: .milliseconds(300))
                         check("Generated WAV opens and playback timer advances", model.playback.duration > 0 && model.playback.position > 0)
-                        try model.playback.toggle(Store.root.appending(path: take.audioFile))
+                        try model.playback.toggle(take.audioURL(relativeTo: Store.root))
                         check("Native playback pauses", !model.playback.isPlaying)
-                        try model.playback.toggle(Store.root.appending(path: take.audioFile))
+                        try model.playback.toggle(take.audioURL(relativeTo: Store.root))
                         check("Native playback resumes", model.playback.isPlaying)
                         model.playback.seek(0.2); model.playback.stop()
                         let exported = Store.root.appending(path: "Exported.wav")
                         try model.copyTake(take, to: exported)
-                        check("Export copies the correct audio", try Data(contentsOf: exported) == Data(contentsOf: Store.root.appending(path: take.audioFile)))
+                        check("Export copies the correct audio", try Data(contentsOf: exported) == Data(contentsOf: take.audioURL(relativeTo: Store.root)))
                     }
                     for take in model.library.takes where take.status != .completed { print("DETAIL \(take.status) \(take.error)") }
                     check("Metadata and completed audio survive reopen", try LibraryFile.load(from: Store.url).takes.allSatisfy { $0.status == .completed })

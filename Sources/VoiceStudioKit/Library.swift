@@ -59,10 +59,13 @@ public struct SpeechTake: Identifiable, Codable, Hashable, Sendable {
         self.device = device; self.number = number; self.createdAt = Date(); self.status = .queued
         self.audioFile = "Audio/\(id.uuidString).wav"
     }
+    public func audioURL(relativeTo libraryRoot: URL) -> URL {
+        audioFile.hasPrefix("/") ? URL(fileURLWithPath: audioFile) : libraryRoot.appending(path: audioFile)
+    }
     public var displayTitle: String { "\(title) · Take \(number)" }
 }
 public struct StudioLibrary: Codable, Equatable, Sendable {
-    public var schemaVersion = 2
+    public var schemaVersion = 3
     public var scripts: [ScriptDocument] = []
     public var voices: [VoiceReference] = []
     public var takes: [SpeechTake] = []
@@ -78,10 +81,10 @@ public enum LibraryFile {
     public static func load(from url: URL) throws -> StudioLibrary {
         guard FileManager.default.fileExists(atPath: url.path) else { return StudioLibrary() }
         var result = try JSONDecoder().decode(StudioLibrary.self, from: Data(contentsOf: url))
-        guard [1, 2].contains(result.schemaVersion) else {
+        guard [1, 2, 3].contains(result.schemaVersion) else {
             throw NSError(domain: "VoiceStudio", code: 1, userInfo: [NSLocalizedDescriptionKey: "This library was created by a newer VoiceStudio version."])
         }
-        result.schemaVersion = 2
+        result.schemaVersion = 3
         return result
     }
     public static func save(_ library: StudioLibrary, to url: URL) throws {

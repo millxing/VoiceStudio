@@ -51,7 +51,7 @@ struct TakeDetail: View {
                         Label(take.status.title, systemImage: take.status.symbol).foregroundStyle(.secondary)
                     }.gridProbe("take-title", area: "take-page")
                     if take.status == .completed {
-                        AudioTransport(url: Store.root.appending(path: take.audioFile)).gridProbe("take-player", area: "take-page")
+                        AudioTransport(url: take.audioURL(relativeTo: Store.root)).gridProbe("take-player", area: "take-page")
                         HStack(spacing: Space.sm) {
                             Button("Export Take…", systemImage: "square.and.arrow.up") { model.export(take) }
                             Button("Show in Finder", systemImage: "folder") { model.reveal(take) }

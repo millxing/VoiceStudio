@@ -9,6 +9,9 @@ struct SettingsView: View {
             Form { EngineSettings() }
                 .formStyle(.grouped).fitsContent().frame(width: 640)
                 .tabItem { Label("Engine", systemImage: "waveform") }.tag(SettingsTab.engine)
+            Form { StorageSettings() }
+                .formStyle(.grouped).fitsContent().frame(width: 640)
+                .tabItem { Label("Storage", systemImage: "folder") }.tag(SettingsTab.storage)
             Form { AppearanceSettings() }
                 .formStyle(.grouped).fitsContent().frame(width: 520)
                 .tabItem { Label("Appearance", systemImage: "paintpalette") }.tag(SettingsTab.appearance)
@@ -16,10 +19,12 @@ struct SettingsView: View {
     }
 }
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case engine, appearance
+    case engine, storage, appearance
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
-    var symbol: String { self == .engine ? "waveform" : "paintpalette" }
+    var symbol: String {
+        switch self { case .engine: "waveform"; case .storage: "folder"; case .appearance: "paintpalette" }
+    }
 }
 struct EngineSettings: View {
     @State private var showingSetup = false
@@ -61,12 +66,6 @@ struct EngineSettings: View {
             Text("Uses the isolated XTTS environment installed on this Mac. Speech and reference audio stay local. Use Install Speech Engine to download and verify a managed runtime on this Mac.")
                 .font(.caption).foregroundStyle(.secondary)
         }
-        Section("Library") {
-            LabeledContent("Location") { Text(Store.root.path).textSelection(.enabled).lineLimit(2) }
-            Button("Show Library in Finder") { NSWorkspace.shared.open(Store.root) }
-            Text("Scripts, voices, and takes are saved automatically. Removing a voice or take from the library retains its source audio for Undo and future editing.")
-                .font(.caption).foregroundStyle(.secondary)
-        }
     }
     private func choosePython() {
         let panel = NSOpenPanel(); panel.title = "Choose XTTS Python Interpreter"; panel.showsHiddenFiles = true
@@ -76,5 +75,44 @@ struct EngineSettings: View {
     private func chooseModel() {
         let panel = NSOpenPanel(); panel.title = "Choose XTTS Model Folder"; panel.canChooseDirectories = true; panel.canChooseFiles = false
         if panel.runModal() == .OK, let url = panel.url { model.preferences.modelFolder = url.path }
+    }
+}
+
+struct StorageSettings: View {
+    @Environment(AppModel.self) private var model
+    @State private var error = ""
+    var body: some View {
+        Section("Takes") {
+            LabeledContent("Save new takes to") {
+                Text(model.takesFolder.path).textSelection(.enabled).lineLimit(3)
+            }
+            HStack {
+                Button("Choose Folder…") { chooseFolder() }
+                if model.preferences.takesFolder != nil {
+                    Button("Use Default Folder") {
+                        do { try model.setTakesFolder(nil); error = "" }
+                        catch { self.error = error.localizedDescription }
+                    }
+                }
+            }.disabled(model.queueRunning)
+            Text("New takes use this folder. Existing takes stay in their original locations and remain available for playback and export.")
+                .font(.caption).foregroundStyle(.secondary)
+            if !error.isEmpty { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary) }
+        }
+        Section("Library") {
+            LabeledContent("Location") { Text(Store.root.path).textSelection(.enabled).lineLimit(3) }
+            Button("Show Library in Finder") { NSWorkspace.shared.open(Store.root) }
+            Text("Scripts, voices, and settings stay in the library. Back up this folder and any separate takes folders.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+    private func chooseFolder() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose Takes Folder"; panel.prompt = "Choose"
+        panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.canCreateDirectories = true
+        panel.directoryURL = model.takesFolder
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        do { try model.setTakesFolder(folder); error = "" }
+        catch { self.error = error.localizedDescription }
     }
 }

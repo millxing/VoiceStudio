@@ -68,9 +68,9 @@ Unsupported pickle objects, other models, invalid tensor shapes/values, and mode
 checkpoints are rejected with an explanation. Full model files belong in
 Settings > Engine, not the voice importer.
 
-Existing version-one libraries upgrade automatically to version two while
+Existing version-one and version-two libraries upgrade automatically to version three while
 retaining scripts, reference voices, and takes. Older app versions will reject
-the upgraded library rather than dropping the new cached-voice fields.
+the upgraded library rather than misreading custom take locations or cached voices.
 
 **Stop Queue** cancels the current and queued work; completed takes stay saved.
 A failed/canceled take can be retried as a new take with the same settings and
@@ -116,8 +116,19 @@ Chinese and Japanese tokenizer dependencies are included in the runtime lock.
 English speech generation is integration-tested; other languages need listening
 review with your own scripts. Microphone recording needs first-use macOS consent.
 
-Your scripts, voice-reference copies, settings, engine log, and WAV files live
-under `~/Library/Application Support/VoiceStudio/`. Back up that folder. Source
+Use the sidebar gear or Command-comma to open Settings. **Appearance** offers
+System, Light and Dark modes, plus the accent color. The choices are saved.
+
+In **Settings → Storage**, choose the folder for new take WAVs, including a folder
+on another drive, or choose **Use Default Folder** to reset it. Existing takes
+stay where they were generated; playback, export and Finder reveal keep using
+their saved locations. Retries use the currently selected folder. Folder changes
+are unavailable while the queue runs. Reconnect an unavailable drive or choose
+a writable folder before generating more takes.
+
+Scripts, voice-reference copies, settings and the engine log live under
+`~/Library/Application Support/VoiceStudio/`. Take WAVs default to its `Audio`
+folder. Back up the library and any custom takes folders. Source
 text is stored in `Library.json`, so moving an imported text file is harmless.
 Remove actions can be undone with Command-Z. Removing a voice/take from the
 library retains its audio for Undo, existing takes, and future editing. This

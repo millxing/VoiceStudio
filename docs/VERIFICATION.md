@@ -139,3 +139,16 @@ are retained for a later nondestructive editor.
 Reproduce: `APP_TEST_CPML_ACCEPTED=1 tools/install-integration.sh --cancel-install`
 and `APP_TEST_CPML_ACCEPTED=1 tools/install-integration.sh --quit-install`, only
 for an account whose user has explicitly accepted the bundled license.
+
+## Appearance and storage update — 2026-11-08
+
+Verification was limited to the changed features at the user's request. Release
+build passed with no new Swift source warnings. Six focused native checks passed:
+new output location, export from that location, preserving old locations after
+reset, resolving legacy paths, version-two library migration, and preferences
+without a custom folder. No full model/generation regression run was performed.
+Inspected the Settings gear and Appearance/Storage/Engine screens in light and
+dark mode; explicit Light and Dark selections render correctly. Grid lint and
+captured layout probes passed. Appearance choices and custom storage preferences
+are persisted; test/snapshot appearance changes do not alter real user defaults.
+New screenshots are in `docs/settings-screenshots/`.

@@ -132,3 +132,17 @@ Status: done
 
 ## Dropped
 - Accounts, billing, cloud services, analytics, vendor onboarding.
+
+### S-010 Choose appearance and take storage
+Screens: scripts, settings-appearance, settings-storage
+Acceptance:
+- Appearance offers System, Light and Dark, persists the selection and updates app windows.
+- A labeled Settings gear is available on every sidebar page; Command-comma still opens Settings.
+- Storage chooses a writable folder for new takes, with a default-folder reset.
+- Existing takes keep their saved locations; new and retried takes retain their output location for playback, export and cancellation.
+UX:
+- Flow: sidebar gear or Command-comma → Appearance or Storage → choose value → saved immediately.
+- Surface: native Settings forms, inline appearance picker and native folder chooser.
+- States: current folder, custom folder, unavailable/unwritable folder with explanation; folder changes disabled during generation.
+- Access: labeled native picker and buttons, gear help and accessibility label.
+Status: done

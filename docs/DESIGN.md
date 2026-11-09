@@ -29,3 +29,13 @@ The installed app contains no developer-account path. A completion receipt and
 per-install model-license acceptance record are stored locally. Test installs use
 /tmp roots and their own Python/package/model caches, with consent inherited only
 from the already accepted CPML on this account for integration testing.
+
+## Appearance and take storage
+The sidebar footer has a Settings gear with the native Settings action and
+Command-comma help. Appearance offers System/Light/Dark alongside accent colors;
+all windows follow the saved mode. Storage is a dedicated Settings tab with a
+folder chooser, reset-to-default action and a clear new-takes-only explanation.
+Existing take locations remain stable when preferences change. Custom output
+paths are captured on each take, used by generation/playback/export/reveal and
+retained across relaunch; missing or unwritable folders produce a repair message.
+Library schema 3 protects those paths from older app versions.

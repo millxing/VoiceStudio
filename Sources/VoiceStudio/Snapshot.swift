@@ -32,6 +32,7 @@ enum Snapshot {
             try? await Task.sleep(for: .seconds(1.5))
             for mode in ["light", "dark"] {
                 NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
+                ThemeStore.shared.mode = mode == "light" ? .light : .dark
                 for page in SidebarItem.allCases where only?.contains(page.rawValue) ?? true {
                     model.sidebar = page
                     try? await Task.sleep(for: .seconds(0.4))
@@ -79,6 +80,7 @@ enum Snapshot {
                 try? await Task.sleep(for: .seconds(1))
                 for mode in ["light", "dark"] {
                     NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
+                ThemeStore.shared.mode = mode == "light" ? .light : .dark
                     for tab in SettingsTab.allCases {
                         model.settingsTab = tab
                         try? await Task.sleep(for: .seconds(0.8))
