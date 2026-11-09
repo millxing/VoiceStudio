@@ -93,7 +93,49 @@ Images and layout files are saved in `screenshots/`.
 
 ## Scope
 
-This is the first usable local speech studio. It uses the installed benchmark
-Python runtime rather than bundling PyTorch into a distributable app. No timeline,
+This is the first usable local speech studio. It can retain a configured Python
+runtime or download a managed runtime through first-run setup. PyTorch and the
+model are downloaded separately from the app bundle. No timeline,
 splicing, or consolidated editing UI is included. Stable takes and original WAVs
 are retained for a later nondestructive editor.
+
+
+## First-run installation verification — 2026-11-08
+
+- Installed `/Applications/VoiceStudio.app`; Swift 6 release builds have no source
+  warnings. The previously documented CLT linker search-path warnings remain.
+- A fresh `/tmp/VoiceStudio-install.data/SpeechEngine` installed checksum-verified
+  uv 0.11.31, managed Python 3.12.13, all 105 locked packages and XTTS-v2 with
+  separate uv/Hugging Face caches. Child PATH contained only system directories;
+  the existing benchmark Python, system uv and Homebrew were not used.
+- This account's explicit prior CPML acceptance authorized the integration test.
+  The test cannot run without `APP_TEST_CPML_ACCEPTED=1`. New-user setup still
+  requires the unchecked consent control; the Python downloader rejects missing
+  acceptance before importing TTS or creating installation files.
+- Clean installation produced non-silent finite speech on strict MPS and ran
+  reference conditioning before writing its receipt. Native queue integration
+  then passed all 17 checks with that managed runtime/model, including multi-part
+  cloned speech, multiple takes, playback, export, persistence and cancellation.
+- Installer checks passed consent gating, cancellation, preserving the selected
+  runtime, retry and adoption after validation. Quit during model installation
+  exited successfully with no installer process left. AppKit terminateLater's
+  nested-loop hang was caught and replaced with cancellation followed by quit
+  from the normal event loop.
+- 21 Swift library checks, 11 Python checks and 11 native basic checks passed.
+  Python checks also ran under the newly installed runtime. Added reference
+  decoder checks cover stereo/resampling/clipping and M4A via packaged FFmpeg;
+  the M4A path asserts torchcodec is not imported.
+- Inspected setup and Engine Settings in light/dark mode; no clipping in setup,
+  disabled Install before consent, native scrollable full model terms. Removed
+  an unwanted empty band caused by applying scroll sizing to the task VStack.
+  Grid lint and every captured layout probe passed. Images are in
+  `docs/setup-verification/`.
+- The app bundle no longer contains a developer-account interpreter path.
+  Existing saved interpreter preferences were preserved. The current Mac's
+  working benchmark runtime is still selected.
+- Full download was exercised on this Mac, not a second physical Mac. First-use
+  Gatekeeper behavior, keyboard-only traversal and VoiceOver remain manual.
+
+Reproduce: `APP_TEST_CPML_ACCEPTED=1 tools/install-integration.sh --cancel-install`
+and `APP_TEST_CPML_ACCEPTED=1 tools/install-integration.sh --quit-install`, only
+for an account whose user has explicitly accepted the bundled license.

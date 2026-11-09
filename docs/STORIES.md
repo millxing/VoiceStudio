@@ -81,7 +81,7 @@ Status: done
 ### S-007 Configure and recover the engine
 Screens: settings-engine, settings-appearance
 Acceptance:
-- [self] Existing benchmark interpreter is used automatically on this Mac; paths are configurable and persisted.
+- [self] Existing saved interpreters remain selected; managed runtime receipts restore configuration when preferences are absent. Paths remain configurable and persisted.
 - [self] Bundled worker is loaded without requiring the source checkout; custom XTTS folder validation checks config and model files.
 - [self] Worker crashes and invalid interpreters produce readable errors, not a frozen UI.
 UX:
@@ -106,6 +106,24 @@ UX:
 - Surface: existing voice task sheet, because this is another source for the same named voice; source selection is inline.
 - States: no file, checking file, validated file, optional speaker choice, saving, and a readable import error. Cancel while inspecting cancels publication; Save is disabled until valid.
 - Access: native labeled source picker, import button, optional speaker picker, Cancel/Save keyboard actions. No icon-only toolbar changes.
+Status: done
+
+## M3 — First-run installation
+
+### S-009 Install the local speech engine
+Screens: setup, settings-engine
+Acceptance:
+- [self] Fresh installation uses its own downloaded uv, managed Python, package cache and model files; it does not require the benchmark environment or Homebrew.
+- [unit/self] Model download requires explicit CPML acceptance. Setup starts with an unchecked consent box and disabled Install action.
+- [self] Generate real MPS speech and condition a voice before adopting the interpreter/model paths.
+- [self] Cancel and quit stop installation; retry reuses downloads. Cancellation preserves existing runtime preferences.
+- [unit] Decode stereo/resampled references and M4A using the bundled FFmpeg executable without importing torchcodec.
+- [snap] Setup and Engine Settings are readable in light and dark mode.
+UX:
+- Flow: first launch without Python → review terms → accept → install → verified engine. Reopen from Speech or Settings.
+- Surface: one task sheet with phase progress and expandable bounded log.
+- States: consent required, downloading tools/Python/packages/model, verifying, cancelled/failed with retry, complete.
+- Access: native labeled checkbox, buttons, progress indicator, selectable terms/log, menu shortcut Option-Command-I.
 Status: done
 
 ## Later

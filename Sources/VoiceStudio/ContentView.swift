@@ -54,11 +54,12 @@ struct ContentView: View {
         .sheet(isPresented: $model.showingVoiceSheet) {
             VoiceSheet(existing: model.editingVoice).environment(model).themed()
         }
+        .sheet(isPresented: $model.showingEngineSetup) { EngineSetupView().environment(model).themed() }
         .task {
             SeedData.insertIfRequested(into: model)
             SelfTest.runIfRequested(model: model)
             Snapshot.runIfRequested(model: model, openSettings: openSettings)
-            if !Store.isOverridden && !SelfTest.requested { model.restartEngine() }
+            if !Store.isOverridden && !SelfTest.requested { model.startOrSetUpEngine() }
         }
     }
 }

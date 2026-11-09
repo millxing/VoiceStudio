@@ -47,6 +47,9 @@ struct VoiceStudioApp: App {
                 Button("Add Voice…") { model.addVoice() }.keyboardShortcut("v", modifiers: [.command, .shift])
             }
             CommandMenu("Speech") {
+                Button("Install Speech Engine…") { model.showingEngineSetup = true }.keyboardShortcut("i", modifiers: [.command, .option])
+                    .disabled(model.queueRunning)
+                Divider()
                 Button("Generate Selected") { model.queue() }.keyboardShortcut("g").disabled(!menu.canGenerate)
                 Button("Generate All") { model.queue(all: true) }.keyboardShortcut("g", modifiers: [.command, .shift]).disabled(!menu.hasScripts)
                 Divider()
@@ -67,8 +70,23 @@ struct VoiceStudioApp: App {
 }
 final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var model: AppModel?
+    private var quittingAfterInstallation = false
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular); NSApp.activate()
+    }
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let model, model.installer.running else { return .terminateNow }
+        if !quittingAfterInstallation {
+            quittingAfterInstallation = true
+            model.installer.cancel()
+            Task {
+                while model.installer.running { try? await Task.sleep(for: .milliseconds(100)) }
+                NSApp.terminate(nil)
+            }
+        }
+        // Return to the normal event loop while cancellation finishes. AppKit's
+        // terminateLater nested loop can block the installer's main-actor work.
+        return .terminateCancel
     }
     func applicationWillTerminate(_ notification: Notification) {
         model?.shutdown()

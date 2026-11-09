@@ -5,7 +5,7 @@ BAMA's native macOS workflow for personal use on this M4 Max Mac Studio.
 
 ## Launch
 
-Open `/Applications/VoiceStudio.app`. The engine warms up in the background;
+Open `/Applications/VoiceStudio.app`. Complete setup if prompted. The engine then warms up in the background;
 its status is shown at the bottom of the sidebar. Initial loading takes longer
 than generating another take with the already-loaded model.
 
@@ -61,27 +61,27 @@ and an optional custom XTTS model folder containing `model.pth`, `config.json`,
 and `vocab.json` (plus `speakers_xtts.pth` for built-in voices if available).
 Custom models without built-in speakers can use cloned voice references.
 
-This personal build uses the isolated Python environment at
-`../.venv/bin/python`, created for the benchmark, and the already downloaded
-model cache in this macOS account. It packages the worker into the `.app` and
-requires no browser, Gradio server, or terminal during normal use. Keep that
-runtime folder available; if it moves, select its Python in Settings. The
-interpreter and PyTorch runtime are not bundled into the app.
+On a new Apple Silicon Mac running macOS 26 or later, copy VoiceStudio to
+`/Applications` and open it. The first-run **Install Speech Engine** sheet shows
+the complete model license. Accept it and choose **Install Speech Engine**.
+Allow about 8 GB of free space and several minutes for downloads and validation.
+No Terminal, Homebrew, or separate Python installation is needed.
 
-If you need a replacement runtime:
+Setup installs a checksum-verified uv tool, an isolated Python 3.12 environment,
+the locked speech packages, a bundled FFmpeg executable, and XTTS-v2 under
+`~/Library/Application Support/VoiceStudio/SpeechEngine/`. It generates real
+speech and checks voice conditioning before adopting the new runtime. Nothing
+is added to your shell profile or system Python. VoiceStudio's `.app` contains
+the installer and worker; the large runtime and model are downloaded separately.
 
-```sh
-uv venv --python 3.12 "$HOME/Library/Application Support/VoiceStudio/Runtime"
-uv pip install --python "$HOME/Library/Application Support/VoiceStudio/Runtime/bin/python" -r Engine/requirements.lock.txt
-```
-
-Select that interpreter in Settings. Model license terms must have been accepted
-in this account. The app never auto-accepts them. If needed, run the following
-interactively using that Python, review the prompt, and answer it yourself:
-
-```sh
-python -c 'from TTS.api import TTS; TTS("tts_models/multilingual/multi-dataset/xtts_v2")'
-```
+Cancel stops the installer. Retry reuses downloaded packages and model files.
+The Details disclosure shows the current log; the last 16 KB are also saved to
+`SpeechEngine/install.log`. Reopen setup with **Speech → Install Speech Engine…**
+(Option-Command-I), or **Settings → Engine → Install Speech Engine…**.
+Your existing custom interpreter remains selected until installation succeeds.
+You can still choose your own compatible Python interpreter or model folder in
+Settings. New accounts must explicitly accept the model license themselves;
+the app never silently accepts it.
 
 The engine enables strict MPS without unsupported-operation CPU fallback; normal
 preprocessing may still run on CPU. The first model download requires internet;
@@ -104,6 +104,7 @@ first version does not automatically purge unused source audio.
 tools/check.sh        # Foundation library checks + worker chunk-boundary tests
 tools/selftest.sh     # native app actions against /tmp storage
 tools/integration.sh  # real multi-script, multiple-take MPS voice cloning
+APP_TEST_CPML_ACCEPTED=1 tools/install-integration.sh # isolated first-run download/check
 tools/cache-integration.sh # saved-cache import, bank selection, and GPU generation
 tools/snap.sh        # every main page, voice sheet and Settings, light/dark
 tools/grid-lint.sh

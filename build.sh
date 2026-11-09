@@ -39,13 +39,8 @@ rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin" "$app/Contents/MacOS/$name"
 sed -e "s/__BUILD__/$(date +%Y%m%d%H%M)/" "$here/Info.plist.in" > "$app/Contents/Info.plist"
-# Local resources: Python worker and benchmark environment, independent of launch cwd.
-cp "$here/Engine/voice_cache.py" "$here/Engine/worker.py" "$here/Engine/requirements.lock.txt" "$here/Engine/XTTS-MODEL-LICENSE.txt" "$app/Contents/Resources/"
-python3 - "$here" "$app/Contents/Resources/runtime-default.json" <<'PYCONFIG'
-import json, sys
-from pathlib import Path
-Path(sys.argv[2]).write_text(json.dumps({"python": str(Path(sys.argv[1]).parent / ".venv/bin/python")}))
-PYCONFIG
+# Portable installer and worker resources, independent of launch cwd.
+cp "$here/Engine/install_engine.py" "$here/Engine/audio_decode.py" "$here/Engine/voice_cache.py" "$here/Engine/worker.py" "$here/Engine/requirements.lock.txt" "$here/Engine/XTTS-MODEL-LICENSE.txt" "$app/Contents/Resources/"
 if [[ -f "$here/../results/cpu-1.wav" ]]; then
   cp "$here/../results/cpu-1.wav" "$app/Contents/Resources/demo-reference.wav"
 fi

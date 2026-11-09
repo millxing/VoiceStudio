@@ -22,6 +22,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var symbol: String { self == .engine ? "waveform" : "paintpalette" }
 }
 struct EngineSettings: View {
+    @State private var showingSetup = false
     @Environment(AppModel.self) private var model
     var body: some View {
         @Bindable var model = model
@@ -43,6 +44,9 @@ struct EngineSettings: View {
             Toggle("Play each completed take automatically", isOn: $model.preferences.autoplay)
         }
         Section("Local Python Runtime") {
+            Button("Install Speech Engine…") { showingSetup = true }
+                .sheet(isPresented: $showingSetup) { EngineSetupView().environment(model).themed() }
+                .disabled(model.queueRunning || model.installer.running)
             TextField("Python interpreter", text: $model.preferences.python).textFieldStyle(.roundedBorder)
                 .disabled(model.queueRunning)
             HStack {
@@ -54,7 +58,7 @@ struct EngineSettings: View {
             if !model.engine.lastError.isEmpty {
                 Text(model.engine.lastError).foregroundStyle(.secondary).textSelection(.enabled)
             }
-            Text("Uses the isolated XTTS environment installed on this Mac. Speech and reference audio stay local. The first load may need internet access to download model files.")
+            Text("Uses the isolated XTTS environment installed on this Mac. Speech and reference audio stay local. Use Install Speech Engine to download and verify a managed runtime on this Mac.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         Section("Library") {

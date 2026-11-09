@@ -23,7 +23,7 @@ final class SpeechEngine {
         stop()
         lastError = ""
         guard FileManager.default.isExecutableFile(atPath: python) else {
-            fail("Python was not found. Choose the XTTS Python interpreter in Settings > Engine.")
+            fail("Python was not found. Choose Speech > Install Speech Engine, or select a compatible interpreter in Settings > Engine.")
             return
         }
         guard let script = Bundle.main.resourceURL?.appending(path: "worker.py"), FileManager.default.fileExists(atPath: script.path) else {

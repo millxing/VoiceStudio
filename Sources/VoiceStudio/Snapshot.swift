@@ -56,6 +56,14 @@ enum Snapshot {
                     model.showingVoiceSheet = false
                     try? await Task.sleep(for: .seconds(0.3))
                 }
+                if only == nil || only?.contains("setup") == true {
+                    model.showingEngineSetup = true
+                    try? await Task.sleep(for: .seconds(0.5))
+                    let sheet = NSApp.windows.first(where: { $0.attachedSheet != nil })?.attachedSheet
+                    await capture(to: "\(dir)/setup-\(mode).png", window: sheet)
+                    model.showingEngineSetup = false
+                    try? await Task.sleep(for: .seconds(0.3))
+                }
                 if only == nil || only?.contains("add-voice") == true {
                     model.editingVoice = nil; model.showingVoiceSheet = true
                     try? await Task.sleep(for: .seconds(0.5))

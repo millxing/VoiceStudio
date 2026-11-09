@@ -14,6 +14,37 @@ enum SelfTest {
         guard requested else { return }
         guard Store.isOverridden else { finish(code: 1); return }
         Task {
+            if CommandLine.arguments.contains("--install-engine") {
+                // This account's explicit prior CPML consent is required by the test runner.
+                guard ProcessInfo.processInfo.environment["APP_TEST_CPML_ACCEPTED"] == "1" else { finish(code: 1); return }
+                model.installer.install(accepted: false) {}
+                check("Installation cannot start without consent", !model.installer.running)
+                if CommandLine.arguments.contains("--quit-install") {
+                    model.installer.install(accepted: true) {}
+                    let deadline = Date().addingTimeInterval(60)
+                    while model.installer.running && !model.installer.status.contains("checking XTTS") && Date() < deadline {
+                        try? await Task.sleep(for: .milliseconds(100))
+                    }
+                    guard model.installer.running && model.installer.status.contains("checking XTTS") else { finish(code: 1); return }
+                    print("PASS Quit requested during active model installation")
+                    NSApp.terminate(nil); return
+                }
+                if CommandLine.arguments.contains("--cancel-install") {
+                    let original = model.preferences
+                    model.installer.install(accepted: true) {}
+                    try? await Task.sleep(for: .milliseconds(100))
+                    model.installer.cancel()
+                    while model.installer.running { try? await Task.sleep(for: .milliseconds(100)) }
+                    check("Cancel stops installation before retry", !model.installer.completed && model.installer.error.contains("cancelled"))
+                    check("Cancellation preserves the selected runtime", model.preferences == original)
+                }
+                model.installer.install(accepted: true) { model.adoptInstalledEngine() }
+                while model.installer.running { try? await Task.sleep(for: .seconds(1)) }
+                check("Clean managed installation generates speech and conditions a voice", model.installer.completed)
+                check("Verified interpreter is adopted", model.preferences.python == model.installer.python.path && model.installer.receipt != nil)
+                if !model.installer.error.isEmpty { print(model.installer.error, model.installer.details) }
+                finish(code: failures == 0 ? 0 : 1); return
+            }
             let base = model.scripts.count
             model.addScript()
             check("New Script selects a retained document", model.scripts.count == base + 1 && model.selectedScript != nil)

@@ -44,6 +44,8 @@ final class AppModel {
     var selectedVoice: UUID? { didSet { saveSession() } }
     var selectedTake: UUID? { didSet { saveSession() } }
     var settingsTab: SettingsTab = .engine
+    let installer = EngineInstaller()
+    var showingEngineSetup = false
     var showingVoiceSheet = false
     var editingVoice: VoiceReference?
     var message = ""
@@ -80,11 +82,12 @@ final class AppModel {
         if let data = try? Data(contentsOf: prefURL), let saved = try? JSONDecoder().decode(StudioPreferences.self, from: data) {
             preferences = saved
         }
-        if preferences.python.isEmpty {
-            if let url = Bundle.main.resourceURL?.appending(path: "runtime-default.json"),
-               let data = try? Data(contentsOf: url), let values = try? JSONDecoder().decode([String: String].self, from: data) {
-                preferences.python = values["python"] ?? ""
-            }
+        if Store.isOverridden, let python = ProcessInfo.processInfo.environment["VOICE_PYTHON"] {
+            preferences.python = python
+        } else if preferences.python.isEmpty, let receipt = installer.receipt {
+            preferences.python = receipt["python"] ?? ""
+            preferences.modelFolder = receipt["modelFolder"] ?? ""
+            preferences.device = receipt["device"] ?? "mps"
         }
         if let data = try? Data(contentsOf: Store.root.appending(path: "Session.json")),
            let session = try? JSONDecoder().decode([String: String].self, from: data) {
@@ -235,6 +238,17 @@ final class AppModel {
         guard queuedCount > 0, !queueRunning else { return }
         completedInBatch = 0; batchTotal = queuedCount; queueRunning = true; next()
     }
+    func adoptInstalledEngine() {
+        guard let receipt = installer.receipt else { return }
+        preferences.python = receipt["python"] ?? ""
+        preferences.modelFolder = receipt["modelFolder"] ?? ""
+        preferences.device = receipt["device"] ?? "mps"
+        if !Store.isOverridden { restartEngine() }
+    }
+    func startOrSetUpEngine() {
+        if !FileManager.default.isExecutableFile(atPath: preferences.python) { showingEngineSetup = true }
+        else { restartEngine() }
+    }
     func restartEngine() {
         guard activeTake == nil else { message = "Stop the queue before restarting the engine."; return }
         engine.start(python: preferences.python, device: preferences.device, modelFolder: preferences.modelFolder, log: logURL)
@@ -333,6 +347,7 @@ final class AppModel {
     }
     func reveal(_ take: SpeechTake) { NSWorkspace.shared.activateFileViewerSelecting([Store.root.appending(path: take.audioFile)]) }
     func shutdown() {
+        installer.cancel()
         queueRunning = false
         if let id = activeTake { mutateTake(id) { $0.status = .failed; $0.error = "Generation was interrupted when the app quit. Retry this take." } }
         engine.stop(); playback.stop(); save()
