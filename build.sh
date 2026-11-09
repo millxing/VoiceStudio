@@ -24,11 +24,11 @@ fi
 
 build_log=$(mktemp)
 build_ok=1
-swift build --sdk /Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk -c "$config" --package-path "$here" --scratch-path "$scratch" > "$build_log" 2>&1 || build_ok=0
+swift build --sdk "$VOICE_SWIFT_SDK" -c "$config" --package-path "$here" --scratch-path "$scratch" > "$build_log" 2>&1 || build_ok=0
 grep -E "error|warning|Build complete" "$build_log" | grep -v "^\[" || true
 rm -f "$build_log"
 [[ "$build_ok" == 1 ]] || { echo "build failed"; exit 1; }
-bin=$(swift build --sdk /Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk -c "$config" --package-path "$here" --scratch-path "$scratch" --show-bin-path)/$name
+bin=$(swift build --sdk "$VOICE_SWIFT_SDK" -c "$config" --package-path "$here" --scratch-path "$scratch" --show-bin-path)/$name
 [[ -x "$bin" ]] || { echo "build failed"; exit 1; }
 # SwiftPM may reuse an identical optimized binary after comment-only edits.
 # Its successful exit and the executable check above establish build success.
@@ -41,9 +41,11 @@ cp "$bin" "$app/Contents/MacOS/$name"
 sed -e "s/__BUILD__/$(date +%Y%m%d%H%M)/" "$here/Info.plist.in" > "$app/Contents/Info.plist"
 # Portable installer and worker resources, independent of launch cwd.
 cp "$here/Engine/install_engine.py" "$here/Engine/audio_decode.py" "$here/Engine/voice_cache.py" "$here/Engine/worker.py" "$here/Engine/requirements.lock.txt" "$here/Engine/XTTS-MODEL-LICENSE.txt" "$app/Contents/Resources/"
-if [[ -f "$here/../results/cpu-1.wav" ]]; then
-  cp "$here/../results/cpu-1.wav" "$app/Contents/Resources/demo-reference.wav"
+# Development fixtures are opt-in; never silently package local recordings.
+if [[ -n "${VOICE_TEST_REFERENCE:-}" ]]; then
+  cp "$VOICE_TEST_REFERENCE" "$app/Contents/Resources/demo-reference.wav"
 fi
+cp "$here/LICENSE" "$here/THIRD_PARTY_NOTICES.md" "$app/Contents/Resources/"
 # Icon Composer requires Xcode's actool. Use a native SF Symbol icon on CLT-only Macs.
 "$here/tools/make_native_icon.sh"
 cp "$here/Resources/AppIcon.icns" "$app/Contents/Resources/"

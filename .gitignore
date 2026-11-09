@@ -9,3 +9,21 @@ xcuserdata/
 
 __pycache__/
 *.pyc
+
+# Local engines, models, voices, recordings and installation state
+.venv/
+venv/
+*.app/
+*.dmg
+*.pth
+*.pt
+*.safetensors
+*.wav
+*.mp3
+*.m4a
+/Runtime/
+/SpeechEngine/
+/results/
+/Library.json
+/Preferences.json
+/Session.json

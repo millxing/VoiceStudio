@@ -1,7 +1,33 @@
 # VoiceStudio
 
-A native Mac app for local XTTS speech generation and voice cloning. Built with
-BAMA's native macOS workflow for personal use on this M4 Max Mac Studio.
+A native macOS app for local XTTS speech generation and voice cloning, with
+Apple GPU acceleration, batch text conversion, and multiple takes per script.
+
+**Requirements:** Apple Silicon, macOS 26 or later, and about 8 GB of free space
+for engine setup. Internet access is required for the initial downloads.
+
+**Source:** [millxing/VoiceStudio](https://github.com/millxing/VoiceStudio).
+The app source is MIT licensed. XTTS-v2 model weights and outputs have separate
+non-commercial terms; see [Licensing](#licensing).
+
+![VoiceStudio](docs/screenshots/scripts-dark.png)
+
+## Install from source
+
+Install Xcode or Apple's Command Line Tools with a Swift 6.2 or newer compiler
+and a macOS 26 or newer SDK, then run:
+
+```sh
+git clone https://github.com/millxing/VoiceStudio.git
+cd VoiceStudio
+./build.sh --open
+```
+
+The build installs `/Applications/VoiceStudio.app`. The first launch offers to
+install the speech engine and model; Python and Homebrew are not required in
+advance. The default local build is ad hoc signed when no development identity
+is available. This repository publishes source; it does not currently provide
+a notarized binary download.
 
 ## Launch
 
@@ -113,9 +139,11 @@ swift tools/check-layout.swift /tmp/VoiceStudio-shots/*-layout.json
 
 All test stores use `/tmp`, never your real library. The installed CLT has stale
 private PackageDescription interfaces, a macOS 27 SDK lacking SwiftUI macro
-plugins, and no XCTest/Swift Testing macro runtime. Build scripts select the
-installed macOS 26.5 SDK and use a local copy of PackageDescription support files
-without the stale private interfaces; system tools are never modified. Library
+plugins, and no XCTest/Swift Testing macro runtime. Build scripts prefer the
+installed macOS 26.5 SDK when present, otherwise the selected Xcode/CLT SDK.
+Override it with `VOICE_SWIFT_SDK`. For the affected CLT, a local copy of
+PackageDescription support files excludes stale private interfaces; system
+tools are never modified. Library
 checks use a small executable harness instead of unavailable testing frameworks.
 The CLT build engine may print linker search-path warnings for absent Xcode
 framework directories; these do not affect the application. Swift source builds
@@ -125,3 +153,23 @@ can be removed. The fallback app icon uses SF Symbols because Icon Composer's
 
 See `docs/BRIEF.md`, `docs/STORIES.md`, `docs/DESIGN.md`, and `docs/VERIFICATION.md`.
 XTTS model terms are included in `Engine/XTTS-MODEL-LICENSE.txt`.
+
+
+The development checks can use an existing compatible engine by setting
+`VOICE_PYTHON=/absolute/path/to/python`. The native cloning integration also
+needs a test reference embedded at build time: set
+`VOICE_TEST_REFERENCE=/absolute/path/to/reference.wav ./build.sh` explicitly.
+A normal build does not include local recordings. Set `APP_TEST_CPML_ACCEPTED=1`
+for installer integration only after personally accepting the model terms.
+
+## Licensing
+
+The VoiceStudio source is available under [MIT](LICENSE), including the retained
+BAMA template attribution. See [third-party notices](THIRD_PARTY_NOTICES.md)
+for engine and dependency licenses.
+
+**The app's MIT license does not grant commercial rights to XTTS-v2 or its
+outputs.** The model uses the [Coqui Public Model License](Engine/XTTS-MODEL-LICENSE.txt),
+which is presented for explicit acceptance before setup downloads the model.
+Model weights, Python environments, saved voices, and personal audio are not
+included in this repository.
