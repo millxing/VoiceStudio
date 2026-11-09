@@ -107,6 +107,9 @@ struct AudioTransport: View {
                 Button(current && playback.isPlaying ? "Pause" : "Play", systemImage: current && playback.isPlaying ? "pause.fill" : "play.fill") {
                     do { try playback.toggle(url) } catch { model.message = "Unable to play audio: \(error.localizedDescription)" }
                 }
+                Toggle("Loop", systemImage: "repeat", isOn: Binding(get: { playback.loops }, set: { playback.loops = $0 }))
+                    .toggleStyle(.button).labelStyle(.iconOnly)
+                    .help(playback.loops ? "Looping is on (Command-L)" : "Loop playback (Command-L)")
                 Slider(value: Binding(get: { current ? playback.position : 0 }, set: { playback.seek($0) }), in: 0...max(1, current ? playback.duration : 1))
                     .disabled(!current).accessibilityLabel("Playback position")
                 Text(current ? "\(timeLabel(playback.position)) / \(timeLabel(playback.duration))" : "Ready to play")

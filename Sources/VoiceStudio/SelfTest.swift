@@ -161,11 +161,61 @@ enum SelfTest {
                     model.stopQueue()
                     check("Stop Queue cancels pending work", model.library.takes.allSatisfy { $0.status == .canceled })
                 }
+                try await editorChecks(model)
+                check("Sidebar order is Scripts, Takes, Editor, Voices", SidebarItem.allCases == [.scripts, .takes, .editor, .voices])
                 for page in SidebarItem.allCases { check("Valid symbol: \(page.symbol)", NSImage(systemSymbolName: page.symbol, accessibilityDescription: nil) != nil) }
             } catch { check("Self-test error: \(error.localizedDescription)", false) }
             print("SELFTEST \(failures == 0 ? "PASS" : "FAIL") \(count) checks")
             finish(code: failures == 0 ? 0 : 1)
         }
+    }
+    /// Arranges two takes on two tracks, splices them, and exports the mix.
+    static func editorChecks(_ model: AppModel) async throws {
+        var made = [SpeechTake]()
+        for (index, seconds) in [2.0, 3.0].enumerated() {
+            var take = SpeechTake(script: ScriptDocument(title: "Editor \(index + 1)", text: "Editor test."), voiceName: "Test", speaker: "Test",
+                                  references: [], language: "en", speed: 1, seed: index, modelFolder: "", device: "cpu", number: 1)
+            let audio = SeedData.speechLike(seconds: seconds, seed: UInt64(index + 7))
+            try FileManager.default.createDirectory(at: take.audioURL(relativeTo: Store.root).deletingLastPathComponent(), withIntermediateDirectories: true)
+            try TimelineAudio.writeWAV(audio, to: take.audioURL(relativeTo: Store.root))
+            take.status = .completed; take.duration = seconds
+            model.library.takes.append(take); made.append(take)
+        }
+        model.sidebar = .editor
+        let undo = UndoManager()
+        model.addToTimeline(made[0], track: 0, undo: undo)
+        model.addToTimeline(made[1], track: 1, at: 0.5, undo: undo)
+        check("Editor places takes on separate tracks", model.timeline.clips.map(\.track) == [0, 1] && abs(model.timeline.duration - 3.5) < 0.01)
+        model.loadWaveforms()
+        check("Editor draws waveforms for placed takes", made.allSatisfy { !(model.waveforms[$0.id] ?? []).isEmpty })
+        let first = model.timeline.clips[0].id
+        model.selectedClip = first; model.seekTimeline(1)
+        model.splitAtPlayhead(undo: undo)
+        check("Split at playhead cuts the selected clip only", model.timeline.clips.count == 3)
+        let ripple = UndoManager()
+        model.deleteClip(ripple: true, undo: ripple)
+        check("Ripple delete closes the gap on its track", model.timeline.clips(on: 0).first.map { abs($0.start) < 0.001 && abs($0.inPoint - 1) < 0.001 } == true)
+        ripple.undo()
+        check("Editor changes can be undone", model.timeline.clips.count == 3)
+        model.playback.loops = true
+        model.toggleTimelinePlayback()
+        try await Task.sleep(for: .milliseconds(300))
+        check("Timeline preview plays with looping", model.isPlayingTimeline && model.playback.isPlaying && model.timelineTime > 0)
+        model.toggleTimelinePlayback()
+        check("Timeline preview pauses", !model.playback.isPlaying)
+        model.playback.stop(); model.playback.loops = false
+        let wav = Store.root.appending(path: "Timeline.wav")
+        try model.exportTimeline(.wav, to: wav)
+        check("Export mixes every track into one WAV", abs(try AudioValidation.validate(wav) - model.timeline.duration) < 0.01)
+        if TimelineAudio.mp3Encoder != nil {
+            let mp3 = Store.root.appending(path: "Timeline.mp3")
+            try model.exportTimeline(.mp3, to: mp3)
+            check("Export writes a readable MP3", abs(try AudioValidation.validate(mp3) - model.timeline.duration) < 0.2)
+        } else { print("SKIP MP3 export: no LAME or FFmpeg installed") }
+        model.setTrack(0, muted: true, undo: undo); model.setTrack(1, muted: true, undo: undo)
+        check("Muting every track leaves nothing to export", (try? model.exportTimeline(.wav, to: wav)) == nil)
+        model.setTrack(0, muted: false, undo: undo); model.setTrack(1, muted: false, undo: undo)
+        check("The timeline survives reopening", try LibraryFile.load(from: Store.url).timeline == model.timeline)
     }
     static func finish(code: Int32) {
         exitCode = code

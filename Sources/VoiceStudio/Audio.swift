@@ -11,23 +11,34 @@ final class AudioPlayback {
     var duration = 0.0
     @ObservationIgnored private var player: AVAudioPlayer?
     @ObservationIgnored private var timer: Timer?
+    /// Repeats the current audio until paused. Applies to takes and the editor timeline.
+    var loops = false { didSet { player?.numberOfLoops = loops ? -1 : 0 } }
     func toggle(_ url: URL) throws {
         if self.url == url, let player {
             if player.isPlaying { player.pause(); isPlaying = false }
             else { if player.currentTime >= player.duration { player.currentTime = 0 }; player.play(); isPlaying = true }
             return
         }
+        try start(url)
+    }
+    /// Starts `url` from `time`, replacing whatever was playing.
+    func start(_ url: URL, at time: Double = 0) throws {
         stop()
         player = try AVAudioPlayer(contentsOf: url)
-        guard let player, player.prepareToPlay(), player.play() else { throw LibraryFile.failure("This audio file could not be opened.") }
-        self.url = url; duration = player.duration; isPlaying = true
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { @Sendable [weak self] _ in
+        guard let player, player.prepareToPlay() else { throw LibraryFile.failure("This audio file could not be opened.") }
+        player.numberOfLoops = loops ? -1 : 0
+        player.currentTime = min(max(0, time), max(0, player.duration - 0.01))
+        guard player.play() else { throw LibraryFile.failure("This audio file could not be played.") }
+        self.url = url; duration = player.duration; position = player.currentTime; isPlaying = true
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { @Sendable [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, let player = self.player else { return }
                 self.position = player.currentTime; self.isPlaying = player.isPlaying
             }
         }
     }
+    /// Pauses or resumes whatever is loaded.
+    func toggle() { if let url { try? toggle(url) } }
     func seek(_ value: Double) { player?.currentTime = value; position = value }
     func stop() { player?.stop(); player = nil; timer?.invalidate(); timer = nil; url = nil; isPlaying = false; position = 0; duration = 0 }
 }
@@ -63,6 +74,11 @@ final class VoiceRecorder {
     }
     func cancel() { canceled = true; _ = stop() }
     func stop() -> URL? { recorder?.stop(); recorder = nil; recording = false; return temporaryURL }
+}
+/// Minutes, seconds, and tenths, for the editor: 1:04.2
+func preciseTimeLabel(_ seconds: Double) -> String {
+    let tenths = max(0, Int((seconds * 10).rounded(.down)))
+    return String(format: "%d:%02d.%d", tenths / 600, (tenths / 10) % 60, tenths % 10)
 }
 func timeLabel(_ seconds: Double) -> String {
     let value = max(0, Int(seconds))

@@ -9,7 +9,15 @@ final class StudioMenuState: ObservableObject {
     @Published var canPlay = false
     @Published var hasTake = false
     @Published var canResume = false
+    @Published var inEditor = false
+    @Published var hasClip = false
+    @Published var hasTimeline = false
+    @Published var canAddTake = false
     func update(_ model: AppModel) {
+        inEditor = model.sidebar == .editor
+        hasClip = inEditor && model.selectedClip != nil
+        hasTimeline = !model.timeline.isEmpty
+        canAddTake = model.take?.status == .completed
         canGenerate = model.canGenerate
         hasScripts = model.scripts.contains { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         canStop = model.queueRunning
@@ -33,6 +41,8 @@ struct VoiceStudioApp: App {
                 .onChange(of: model.selectedScripts) { menu.update(model) }
                 .onChange(of: model.selectedTake) { menu.update(model) }
                 .onChange(of: model.queueRunning) { menu.update(model) }
+                .onChange(of: model.sidebar) { menu.update(model) }
+                .onChange(of: model.selectedClip) { menu.update(model) }
                 .task { delegate.model = model }
         }
         .defaultLaunchBehavior(.presented)
@@ -57,12 +67,42 @@ struct VoiceStudioApp: App {
                 Button("Resume Queue") { model.resumeQueue() }.disabled(!menu.canResume)
             }
             CommandMenu("Playback") {
-                Button("Play/Pause") { if let take = model.take { model.play(take) } }
-                    .keyboardShortcut("p", modifiers: [.command, .option]).disabled(!menu.canPlay)
+                // In the editor, Play/Pause plays the timeline; elsewhere, the selected take.
+                Button("Play/Pause") {
+                    if menu.inEditor { model.toggleTimelinePlayback() } else if let take = model.take { model.play(take) }
+                }
+                .keyboardShortcut("p", modifiers: [.command, .option]).disabled(menu.inEditor ? !menu.hasTimeline : !menu.canPlay)
+                Toggle("Loop Playback", isOn: Binding(get: { model.playback.loops }, set: { model.playback.loops = $0 }))
+                    .keyboardShortcut("l")
+                Divider()
                 Button("Export Take…") { if let take = model.take { model.export(take) } }
                     .keyboardShortcut("e", modifiers: [.command, .shift]).disabled(!menu.canPlay)
                 Button("Show in Finder") { if let take = model.take { model.reveal(take) } }
                     .keyboardShortcut("r", modifiers: [.command, .shift]).disabled(!menu.canPlay)
+            }
+            CommandMenu("Editor") {
+                Button("Add Selected Take to Timeline") { if let take = model.take { model.addToTimeline(take, track: 0, undo: NSApp.keyWindow?.undoManager) } }
+                    .keyboardShortcut("a", modifiers: [.command, .shift]).disabled(!menu.canAddTake)
+                Divider()
+                Button("Split at Playhead") { model.splitAtPlayhead(undo: NSApp.keyWindow?.undoManager) }
+                    .keyboardShortcut("b").disabled(!menu.inEditor || !menu.hasTimeline)
+                Button("Delete Clip") { model.deleteClip(ripple: false, undo: NSApp.keyWindow?.undoManager) }
+                    .keyboardShortcut(.delete, modifiers: .command).disabled(!menu.hasClip)
+                Button("Ripple Delete Clip") { model.deleteClip(ripple: true, undo: NSApp.keyWindow?.undoManager) }
+                    .keyboardShortcut(.delete, modifiers: [.command, .shift]).disabled(!menu.hasClip)
+                Button("Go to Start") { model.seekTimeline(0) }
+                    .keyboardShortcut(.home, modifiers: []).disabled(!menu.inEditor)
+                Divider()
+                Button("Zoom In") { model.zoom(by: 1.5) }.keyboardShortcut("=").disabled(!menu.inEditor)
+                Button("Zoom Out") { model.zoom(by: 1 / 1.5) }.keyboardShortcut("-").disabled(!menu.inEditor)
+                Divider()
+                Button("Export Timeline as WAV…") { model.exportTimeline(.wav) }
+                    .keyboardShortcut("e", modifiers: [.command, .option]).disabled(!menu.hasTimeline)
+                Button("Export Timeline as MP3…") { model.exportTimeline(.mp3) }
+                    .keyboardShortcut("e", modifiers: [.command, .option, .shift]).disabled(!menu.hasTimeline)
+                Divider()
+                Button("Clear Timeline") { model.clearTimeline(undo: NSApp.keyWindow?.undoManager) }
+                    .keyboardShortcut(.delete, modifiers: [.command, .option]).disabled(!menu.hasTimeline)
             }
         }
         Settings { SettingsView().environment(model).themed() }.windowResizability(.contentSize)

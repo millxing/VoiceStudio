@@ -18,11 +18,11 @@ enum Store {
     }
 }
 enum SidebarItem: String, CaseIterable, Identifiable {
-    case scripts, voices, takes
+    case scripts, takes, editor, voices
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
     var symbol: String {
-        switch self { case .scripts: "doc.text"; case .voices: "person.wave.2"; case .takes: "waveform" }
+        switch self { case .scripts: "doc.text"; case .takes: "waveform"; case .editor: "slider.horizontal.below.rectangle"; case .voices: "person.wave.2" }
     }
 }
 struct StudioPreferences: Codable, Equatable {
@@ -57,6 +57,13 @@ final class AppModel {
     var batchTotal = 0
     let engine = SpeechEngine()
     let playback = AudioPlayback()
+    // Editor state. The arrangement itself lives in `library.timeline`.
+    var selectedClip: UUID?
+    var playhead = 0.0
+    var zoom = 40.0
+    var waveforms: [UUID: [Float]] = [:]
+    @ObservationIgnored var sampleCache: [UUID: [Float]] = [:]
+    @ObservationIgnored var timelineRender: URL?
     @ObservationIgnored private var saveEnabled = false
     @ObservationIgnored private var canWrite = true
     @ObservationIgnored private var startingJob: SpeechTake?

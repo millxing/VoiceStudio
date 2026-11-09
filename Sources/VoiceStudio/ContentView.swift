@@ -35,8 +35,9 @@ struct ContentView: View {
         } content: {
             switch model.sidebar ?? .scripts {
             case .scripts: ScriptList()
-            case .voices: VoiceList()
             case .takes: TakeList()
+            case .editor: EditorBin()
+            case .voices: VoiceList()
             }
         } detail: {
             VStack(spacing: 0) {
@@ -50,8 +51,9 @@ struct ContentView: View {
                 }
                 switch model.sidebar ?? .scripts {
                 case .scripts: ScriptDetail()
-                case .voices: VoiceDetail()
                 case .takes: TakeDetail()
+                case .editor: EditorDetail()
+                case .voices: VoiceDetail()
                 }
             }
         }

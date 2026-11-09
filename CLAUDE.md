@@ -16,7 +16,7 @@ Codable JSON library and no server.
 
 - Build and install: `./build.sh`. Add `--open` to restart the app with the new build. The build shows warnings; fix them.
 - Library and worker checks: `tools/check.sh`. This CLT lacks the Swift Testing/XCTest runtime.
-- Self-test (the app's real functions on a /tmp store): `tools/selftest.sh`. Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
+- Self-test (the app's real functions on a /tmp store): `tools/selftest.sh`. Build with `VOICE_TEST_REFERENCE=../results/mps-reference-1.wav ./build.sh` first; without a bundled reference the voice check fails. Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
 - After every UI change, take snapshots with sample data and look at them: `tools/snap.sh`.
   It writes `/tmp/VoiceStudio-shots/<page>-light.png` and `-dark.png` for every sidebar page, and `settings-<tab>-light.png` and `-dark.png` for every Settings tab, then quits. `APP_SNAPSHOT_PAGES=all,settings tools/snap.sh` limits the pages.
   For a panel, sheet, or popover, add a capture to `Snapshot.swift` like the Settings loop.
@@ -58,4 +58,5 @@ The bama plugin has a skill for each step: `mac-design` (design rules),
 - Run tools/integration.sh after changing process callbacks, the generation queue, audio playback, or the worker protocol.
 - Never run automated mutations against the real library. Use APP_STORE=/tmp/<name>.store.
 - External menu audit still needed: with no script selection, Speech > Generate Selected is disabled; selecting scripts enables it. While running, Stop Queue is enabled. With no completed take selected, Playback commands are disabled. Selecting a completed take enables them. CUA attachment returned cgWindowNotFound on this machine; do not report hover checks as passed until actually observed.
+- Editor: `library.timeline` (VoiceStudioKit/Timeline.swift) holds clips on 3 tracks; mixing is `TimelineMixer` (mono, 24 kHz). Drags edit a view-local draft and commit one undo step on release. macOS has no MP3 encoder, so MP3 export shells out to Homebrew `lame` or `ffmpeg`.
 - Microphone/input-device and VoiceOver checks are still manual. See docs/VERIFICATION.md.

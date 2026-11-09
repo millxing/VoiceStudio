@@ -69,7 +69,17 @@ public struct StudioLibrary: Codable, Equatable, Sendable {
     public var scripts: [ScriptDocument] = []
     public var voices: [VoiceReference] = []
     public var takes: [SpeechTake] = []
+    /// The editor arrangement. Libraries saved before the editor existed have none.
+    public var timeline = Timeline()
     public init() {}
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        scripts = try c.decodeIfPresent([ScriptDocument].self, forKey: .scripts) ?? []
+        voices = try c.decodeIfPresent([VoiceReference].self, forKey: .voices) ?? []
+        takes = try c.decodeIfPresent([SpeechTake].self, forKey: .takes) ?? []
+        timeline = try c.decodeIfPresent(Timeline.self, forKey: .timeline) ?? Timeline()
+    }
     public mutating func recoverInterrupted() {
         for i in takes.indices where takes[i].status == .running {
             takes[i].status = .failed
