@@ -112,7 +112,7 @@ struct VoiceSheet: View {
                         ForEach(entries) { choice in Text(choice.name).tag(choice.id) }
                     }.disabled(saving)
                 }
-                Text("Cached voices contain no playable recording. Generate a take to preview this voice.").font(.callout).foregroundStyle(.secondary)
+                Text("Cached voices contain no playable recording. Generate a clip to preview this voice.").font(.callout).foregroundStyle(.secondary)
             } else {
                 Text(inspecting ? "Checking saved voices…" : "No cached voice selected").font(.callout).foregroundStyle(.secondary).padding(.vertical, Space.lg)
             }

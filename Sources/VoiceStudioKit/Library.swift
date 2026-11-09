@@ -50,6 +50,7 @@ public struct SpeechTake: Identifiable, Codable, Hashable, Sendable {
     public var generationSeconds: Double = 0
     public var audioFile: String
     public var error = ""
+    public var importedFilename: String?
     public init(script: ScriptDocument, voiceName: String, speaker: String, references: [String], language: String,
                 speed: Double, seed: Int, modelFolder: String, device: String, number: Int, cachedVoice: String? = nil) {
         self.id = UUID(); self.scriptID = script.id; self.title = script.title; self.text = script.text
@@ -62,7 +63,7 @@ public struct SpeechTake: Identifiable, Codable, Hashable, Sendable {
     public func audioURL(relativeTo libraryRoot: URL) -> URL {
         audioFile.hasPrefix("/") ? URL(fileURLWithPath: audioFile) : libraryRoot.appending(path: audioFile)
     }
-    public var displayTitle: String { "\(title) · Take \(number)" }
+    public var displayTitle: String { importedFilename == nil ? "\(title) · Clip \(number)" : title }
 }
 public struct StudioLibrary: Codable, Equatable, Sendable {
     public var schemaVersion = 3
@@ -83,7 +84,7 @@ public struct StudioLibrary: Codable, Equatable, Sendable {
     public mutating func recoverInterrupted() {
         for i in takes.indices where takes[i].status == .running {
             takes[i].status = .failed
-            takes[i].error = "Generation was interrupted. Retry this take."
+            takes[i].error = "Generation was interrupted. Retry this clip."
         }
     }
 }

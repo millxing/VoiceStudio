@@ -46,7 +46,7 @@ struct EngineSettings: View {
             }.disabled(model.queueRunning)
             Text("A custom XTTS folder must contain model.pth, config.json, and vocab.json. Restart the engine after changing these settings.")
                 .font(.caption).foregroundStyle(.secondary)
-            Toggle("Play each completed take automatically", isOn: $model.preferences.autoplay)
+            Toggle("Play each completed clip automatically", isOn: $model.preferences.autoplay)
         }
         Section("Local Python Runtime") {
             Button("Install Speech Engine…") { showingSetup = true }
@@ -82,8 +82,8 @@ struct StorageSettings: View {
     @Environment(AppModel.self) private var model
     @State private var error = ""
     var body: some View {
-        Section("Takes") {
-            LabeledContent("Save new takes to") {
+        Section("Clips") {
+            LabeledContent("Save new clips to") {
                 Text(model.takesFolder.path).textSelection(.enabled).lineLimit(3)
             }
             HStack {
@@ -95,20 +95,20 @@ struct StorageSettings: View {
                     }
                 }
             }.disabled(model.queueRunning)
-            Text("New takes use this folder. Existing takes stay in their original locations and remain available for playback and export.")
+            Text("New clips use this folder. Existing clips stay in their original locations and remain available for playback and export.")
                 .font(.caption).foregroundStyle(.secondary)
             if !error.isEmpty { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary) }
         }
         Section("Library") {
             LabeledContent("Location") { Text(Store.root.path).textSelection(.enabled).lineLimit(3) }
             Button("Show Library in Finder") { NSWorkspace.shared.open(Store.root) }
-            Text("Scripts, voices, and settings stay in the library. Back up this folder and any separate takes folders.")
+            Text("Scripts, voices, and settings stay in the library. Back up this folder and any separate clips folders.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
     private func chooseFolder() {
         let panel = NSOpenPanel()
-        panel.title = "Choose Takes Folder"; panel.prompt = "Choose"
+        panel.title = "Choose Clips Folder"; panel.prompt = "Choose"
         panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.canCreateDirectories = true
         panel.directoryURL = model.takesFolder
         guard panel.runModal() == .OK, let folder = panel.url else { return }

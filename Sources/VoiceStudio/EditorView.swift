@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import VoiceStudioKit
 
 /// Editor sizes. Lanes are tall enough for a readable waveform under the clip title.
@@ -36,7 +37,7 @@ struct EditorBin: View {
                 Spacer(minLength: Space.sm)
                 let playing = model.playback.url == take.audioURL(relativeTo: Store.root) && model.playback.isPlaying
                 Button(playing ? "Pause" : "Play", systemImage: playing ? "pause.fill" : "play.fill") { model.play(take) }
-                    .labelStyle(.iconOnly).buttonStyle(.borderless).help("Preview this take")
+                    .labelStyle(.iconOnly).buttonStyle(.borderless).help("Preview this clip")
             }
             .padding(.vertical, Space.xs).tag(take.id)
             .draggable(take.id.uuidString)
@@ -50,10 +51,11 @@ struct EditorBin: View {
         }
         .overlay {
             if model.editorTakes.isEmpty {
-                ContentUnavailableView("No Takes to Edit", systemImage: "waveform",
-                    description: Text("Generate takes from Scripts, then drag them onto the timeline."))
+                ContentUnavailableView("No Clips to Edit", systemImage: "waveform",
+                    description: Text("Generate clips from Scripts or drop WAV/MP3 files here."))
             }
         }
+        .dropDestination(for: URL.self) { urls, _ in model.importAudio(urls, undo: undo) }
         .navigationTitle("Editor")
         .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 400)
         .toolbar {
@@ -62,7 +64,7 @@ struct EditorBin: View {
                     if let take = model.take { model.addToTimeline(take, track: 0, undo: undo) }
                 }
                 .disabled(model.take?.status != .completed)
-                .help("Add the selected take to the end of track 1 (Shift-Command-A)")
+                .help("Add the selected clip to the end of track 1 (Shift-Command-A)")
             }
         }
     }
@@ -75,7 +77,8 @@ struct EditorDetail: View {
     /// The arrangement while a drag or slider is in progress. Committed once, as one undo step, when it ends.
     @State private var draft: Timeline?
     @State private var dragBase: Timeline?
-    @FocusState private var focused: Bool
+    @State private var dragDuplicate: UUID?
+    @State private var focusRequest: UUID?
 
     var body: some View {
         let shown = draft ?? model.timeline
@@ -96,11 +99,7 @@ struct EditorDetail: View {
                 }
             }
             .frame(height: EditorMetrics.height)
-            .focusable().focusEffectDisabled().focused($focused)
-            .onKeyPress(.space) { model.toggleTimelinePlayback(); return .handled }
-            .onKeyPress(keys: [.delete, .deleteForward]) { press in
-                model.deleteClip(ripple: press.modifiers.contains(.shift), undo: undo); return .handled
-            }
+            .background(TimelineKeyboard(model: model, focusRequest: focusRequest))
             Divider()
             inspector(shown)
                 .padding(Space.margin).gridArea("editor-inspector", inset: 0)
@@ -157,7 +156,7 @@ struct EditorDetail: View {
                     .frame(height: EditorMetrics.ruler)
                     .contentShape(Rectangle())
                     .gesture(DragGesture(minimumDistance: 0).onChanged { value in
-                        focused = true
+                        focusRequest = UUID()
                         model.seekTimeline(value.location.x / pps)
                     })
                     .overlay(alignment: .bottom) { Divider() }
@@ -170,13 +169,13 @@ struct EditorDetail: View {
             }
             .contentShape(Rectangle())
             .onTapGesture { location in
-                focused = true
+                focusRequest = UUID()
                 model.selectedClip = nil
                 model.seekTimeline(location.x / pps)
             }
             if shown.isEmpty {
-                ContentUnavailableView("Drag Takes Here", systemImage: "square.and.arrow.down",
-                    description: Text("Drop takes from the list onto any of the three tracks. Export mixes all tracks together."))
+                ContentUnavailableView("Drag Clips Here", systemImage: "square.and.arrow.down",
+                    description: Text("Drop clips from the list or WAV/MP3 files onto any of the three tracks. Export mixes all tracks together."))
                     .frame(maxWidth: .infinity).frame(height: EditorMetrics.lane * CGFloat(Timeline.trackCount))
                     .offset(y: EditorMetrics.ruler) // grid: ok timeline coordinates
                     .allowsHitTesting(false)
@@ -189,22 +188,53 @@ struct EditorDetail: View {
                             y: EditorMetrics.ruler + CGFloat(clip.track) * EditorMetrics.lane + EditorMetrics.clipInset) // grid: ok timeline coordinates
             }
             Playhead(pixelsPerSecond: pps)
+            // A visible grab handle uses the canvas coordinates, even when scrolled.
+            Image(systemName: "arrowtriangle.down.fill")
+                .foregroundStyle(Palette.accent)
+                .frame(width: 16, height: EditorMetrics.ruler)
+                .contentShape(Rectangle())
+                .offset(x: model.timelineTime * pps - 8) // grid: ok timeline time-to-x placement
+                .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("timeline"))
+                    .onChanged { value in focusRequest = UUID(); model.seekTimeline(value.location.x / pps) })
+                .help("Drag to scrub the timeline")
+                .accessibilityLabel("Playhead")
         }
         .coordinateSpace(.named("timeline"))
-        .dropDestination(for: String.self) { items, location in
-            let track = Int((location.y - EditorMetrics.ruler) / EditorMetrics.lane)
+        .onDrop(of: [.fileURL, .utf8PlainText], isTargeted: nil) { providers, location in
             guard location.y >= EditorMetrics.ruler else { return false }
-            var placed = false
-            var start = model.timeline.snap(time: location.x / pps, excluding: nil, extra: [model.timelineTime],
-                                            tolerance: EditorMetrics.snap / pps)
-            for item in items {
-                guard let id = UUID(uuidString: item), let take = model.library.takes.first(where: { $0.id == id }) else { continue }
-                model.addToTimeline(take, track: track, at: start, undo: undo)
-                start += model.sourceDuration(id)
-                placed = true
+            let track = min(Timeline.trackCount - 1, Int((location.y - EditorMetrics.ruler) / EditorMetrics.lane))
+            let start = model.timeline.snap(time: location.x / pps, excluding: nil,
+                extra: [model.timelineTime], tolerance: EditorMetrics.snap / pps)
+            let files = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }
+            if !files.isEmpty {
+                // Load sequentially to preserve the order of multiple dropped files.
+                Task { @MainActor in
+                    var urls: [URL] = []
+                    for provider in files {
+                        let url: URL? = await withCheckedContinuation { continuation in
+                            _ = provider.loadObject(ofClass: URL.self) { url, _ in continuation.resume(returning: url) }
+                        }
+                        if let url { urls.append(url) }
+                    }
+                    if model.importAudio(urls, track: track, at: start, undo: undo) { focusRequest = UUID() }
+                }
+                return true
             }
-            if placed { focused = true }
-            return placed
+            let sources = providers.filter { $0.canLoadObject(ofClass: String.self) }
+            Task { @MainActor in
+                var position = start
+                for provider in sources {
+                    let item: String? = await withCheckedContinuation { continuation in
+                        _ = provider.loadObject(ofClass: String.self) { item, _ in continuation.resume(returning: item) }
+                    }
+                    guard let item, let id = UUID(uuidString: item),
+                          let source = model.library.takes.first(where: { $0.id == id }) else { continue }
+                    model.addToTimeline(source, track: track, at: position, undo: undo)
+                    position += model.sourceDuration(id)
+                    focusRequest = UUID()
+                }
+            }
+            return !sources.isEmpty
         }
     }
 
@@ -216,18 +246,22 @@ struct EditorDetail: View {
             .overlay(alignment: .trailing) { trimHandle(clip, leading: false, pps: pps) }
             .gesture(DragGesture(minimumDistance: 2, coordinateSpace: .named("timeline"))
                 .onChanged { value in
-                    guard let (base, original) = begin(clip) else { return }
+                    guard let (base, original) = begin(clip, duplicate: (NSApp.currentEvent?.modifierFlags ?? NSEvent.modifierFlags).contains(.option)) else { return }
                     let tracks = Int((value.translation.height / EditorMetrics.lane).rounded())
                     let start = base.snap(start: original.start + value.translation.width / pps, length: original.length,
                                           excluding: clip.id, extra: [model.timelineTime], tolerance: EditorMetrics.snap / pps)
                     var next = base
-                    next.move(clip.id, to: start, track: original.track + tracks)
+                    if let dragDuplicate {
+                        var duplicate = original; duplicate.id = dragDuplicate
+                        next.clips.append(duplicate)
+                    }
+                    next.move(dragDuplicate ?? clip.id, to: start, track: original.track + tracks)
                     draft = next
                 }
-                .onEnded { _ in commit("Move Clip") })
-            .onTapGesture { focused = true; model.selectedClip = clip.id }
+                .onEnded { _ in commit(dragDuplicate == nil ? "Move Clip" : "Duplicate Clip") })
+            .onTapGesture { focusRequest = UUID(); model.selectedClip = clip.id }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(model.takeFor(clip)?.displayTitle ?? "Missing take"), track \(clip.track + 1), starts \(preciseTimeLabel(clip.start))")
+            .accessibilityLabel("\(model.takeFor(clip)?.displayTitle ?? "Missing clip"), track \(clip.track + 1), starts \(preciseTimeLabel(clip.start))")
             .accessibilityAddTraits(model.selectedClip == clip.id ? .isSelected : [])
     }
 
@@ -251,14 +285,18 @@ struct EditorDetail: View {
     }
 
     /// The arrangement and clip as they were when the current drag began.
-    private func begin(_ clip: TimelineClip) -> (Timeline, TimelineClip)? {
-        if dragBase == nil { dragBase = model.timeline; model.selectedClip = clip.id; focused = true }
+    private func begin(_ clip: TimelineClip, duplicate: Bool = false) -> (Timeline, TimelineClip)? {
+        if dragBase == nil {
+            dragBase = model.timeline
+            dragDuplicate = duplicate ? UUID() : nil
+            model.selectedClip = dragDuplicate ?? clip.id; focusRequest = UUID()
+        }
         guard let base = dragBase, let original = base.clips.first(where: { $0.id == clip.id }) else { return nil }
         return (base, original)
     }
     private func commit(_ action: String) {
         if let draft { model.setTimeline(draft, action: action, undo: undo) }
-        draft = nil; dragBase = nil
+        draft = nil; dragBase = nil; dragDuplicate = nil
     }
 
     // MARK: Inspector
@@ -266,18 +304,18 @@ struct EditorDetail: View {
     @ViewBuilder private func inspector(_ shown: Timeline) -> some View {
         if let clip = shown.clips.first(where: { $0.id == model.selectedClip }) {
             VStack(alignment: .leading, spacing: Space.sm) {
-                Text(model.takeFor(clip)?.displayTitle ?? "Missing take").font(.headline)
-                Text("Track \(clip.track + 1) · starts at \(preciseTimeLabel(clip.start)) · \(String(format: "%.2f", clip.length)) seconds · uses \(preciseTimeLabel(clip.inPoint))–\(preciseTimeLabel(clip.outPoint)) of the take")
+                Text(model.takeFor(clip)?.displayTitle ?? "Missing clip").font(.headline)
+                Text("Track \(clip.track + 1) · starts at \(preciseTimeLabel(clip.start)) · \(String(format: "%.2f", clip.length)) seconds · uses \(preciseTimeLabel(clip.inPoint))–\(preciseTimeLabel(clip.outPoint)) of the clip")
                     .font(.callout).foregroundStyle(.secondary).monospacedDigit()
                 HStack(spacing: Space.sm) {
                     Button("Split at Playhead", systemImage: "scissors") { model.splitAtPlayhead(undo: undo) }
                     Button("Delete", systemImage: "trash") { model.deleteClip(ripple: false, undo: undo) }
                     Button("Ripple Delete") { model.deleteClip(ripple: true, undo: undo) }
-                        .help("Delete the clip and move later clips on its track left to close the gap (Shift-Command-Delete)")
+                        .help("Delete the clip and move later clips on its track left to close the gap (Shift-Delete)")
                 }
             }.gridProbe("editor-clip", area: "editor-inspector")
         } else {
-            Label("Drag takes onto a track. Drag a clip to move it, or its edges to trim. Split at the playhead with Command-B. Space plays the timeline.",
+            Label("Drag clips onto a track. Drag a clip to move it, Option-drag to duplicate, or drag its edges to trim. Cut/copy/paste with Command-X/C/V. Delete removes the selection. Split at the playhead with Command-B. Space plays the timeline.",
                   systemImage: "info.circle")
                 .font(.callout).foregroundStyle(.secondary)
                 .gridProbe("editor-hint", area: "editor-inspector")
@@ -380,7 +418,7 @@ struct ClipView: View {
                     .fill(Palette.accent.opacity(0.8))
                     .padding(.top, Space.xl).padding(.bottom, Space.xs)
             }
-            Text(take?.displayTitle ?? "Missing take")
+            Text(take?.displayTitle ?? "Missing clip")
                 .font(.caption).lineLimit(1)
                 .foregroundStyle(take == nil ? AnyShapeStyle(.red) : AnyShapeStyle(.primary))
                 .padding(.horizontal, Space.sm).padding(.top, Space.xs)
@@ -389,7 +427,7 @@ struct ClipView: View {
         .overlay(shape.strokeBorder(Palette.accent.opacity(selected ? 1 : 0.5), lineWidth: selected ? 2 : 1))
         .opacity(muted ? 0.5 : 1)
         .contentShape(shape)
-        .help(take?.displayTitle ?? "This take was removed from the library.")
+        .help(take?.displayTitle ?? "This clip was removed from the library.")
     }
 }
 

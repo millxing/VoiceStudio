@@ -67,10 +67,60 @@ extension AppModel {
 
     // MARK: Actions
 
+    static let clipPasteboardType = "com.robschoen.voicestudio.timeline-clip"
+
+    func pasteClip(_ data: Data, undo: UndoManager?) {
+        guard var clip = try? JSONDecoder().decode(TimelineClip.self, from: data),
+              library.takes.contains(where: { $0.id == clip.takeID }),
+              timeline.tracks.indices.contains(clip.track), clip.inPoint >= 0,
+              clip.inPoint.isFinite, clip.outPoint.isFinite, clip.length >= Timeline.minimumLength else { return }
+        clip.id = UUID(); clip.start = timelineTime
+        editTimeline("Paste Clip", undo: undo) { $0.clips.append(clip) }
+        selectedClip = clip.id
+    }
+
+    /// Imports a private copy so moving or deleting the original file cannot break the project.
+    @discardableResult
+    func importAudio(_ urls: [URL], track: Int = 0, at start: Double? = nil, undo: UndoManager?) -> Bool {
+        var placed = false
+        var position = start ?? timeline.end(of: track)
+        for url in urls {
+            guard ["wav", "mp3"].contains(url.pathExtension.lowercased()) else { continue }
+            let access = url.startAccessingSecurityScopedResource()
+            defer { if access { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let samples = try TimelineAudio.samples(url)
+                guard !samples.isEmpty else { throw LibraryFile.failure("This file contains no readable audio.") }
+                var source = SpeechTake(script: ScriptDocument(title: url.deletingPathExtension().lastPathComponent),
+                    voiceName: "Imported audio", speaker: "", references: [], language: "en", speed: 1,
+                    seed: 0, modelFolder: "", device: "", number: 1)
+                source.status = .completed; source.duration = Double(samples.count) / TimelineAudio.sampleRate
+                source.modelName = "Imported audio"; source.importedFilename = url.lastPathComponent
+                let destination = source.audioURL(relativeTo: Store.root)
+                try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try TimelineAudio.writeWAV(samples, to: destination)
+                library.takes.append(source)
+                sampleCache[source.id] = samples
+                addToTimeline(source, track: track, at: position, undo: undo)
+                position += source.duration
+                selectedTake = source.id; placed = true
+            } catch { message = "Unable to import \(url.lastPathComponent): \(error.localizedDescription)" }
+        }
+        return placed
+    }
+
+    func importAudio(undo: UndoManager?) {
+        let panel = NSOpenPanel()
+        panel.title = "Import Audio Clips"; panel.allowedContentTypes = [.wav, .mp3]
+        panel.allowsMultipleSelection = true
+        guard panel.runModal() == .OK else { return }
+        _ = importAudio(panel.urls, undo: undo)
+    }
+
     func addToTimeline(_ take: SpeechTake, track: Int, at start: Double? = nil, undo: UndoManager?) {
         guard take.status == .completed else { return }
         let length = sourceDuration(take.id)
-        guard length > 0 else { message = "This take's audio could not be read. Generate it again."; return }
+        guard length > 0 else { message = "This clip's audio could not be read. Generate it again."; return }
         var added: TimelineClip?
         editTimeline("Add Clip", undo: undo) { added = $0.add(takeID: take.id, duration: length, track: track, at: start) }
         selectedClip = added?.id

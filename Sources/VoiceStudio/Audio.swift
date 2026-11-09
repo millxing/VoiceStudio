@@ -30,12 +30,14 @@ final class AudioPlayback {
         player.currentTime = min(max(0, time), max(0, player.duration - 0.01))
         guard player.play() else { throw LibraryFile.failure("This audio file could not be played.") }
         self.url = url; duration = player.duration; position = player.currentTime; isPlaying = true
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { @Sendable [weak self] _ in
-            Task { @MainActor [weak self] in
+        timer = Timer(timeInterval: 1.0 / 30, repeats: true) { @Sendable [weak self] _ in
+            MainActor.assumeIsolated {
                 guard let self, let player = self.player else { return }
                 self.position = player.currentTime; self.isPlaying = player.isPlaying
             }
         }
+        // Keep the UI clock moving while AppKit tracks mouse presses and drags.
+        if let timer { RunLoop.main.add(timer, forMode: .common) }
     }
     /// Pauses or resumes whatever is loaded.
     func toggle() { if let url { try? toggle(url) } }

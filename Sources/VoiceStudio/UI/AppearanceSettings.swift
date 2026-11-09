@@ -61,7 +61,7 @@ private struct AccentPreview: View {
             .padding(.bottom, Space.sm)
             sidebarRow("Scripts", symbol: "doc.text", selected: true)
             sidebarRow("Voices", symbol: "person.wave.2", selected: false)
-            sidebarRow("Takes", symbol: "waveform", selected: false)
+            sidebarRow("Clips", symbol: "waveform", selected: false)
             Spacer(minLength: 0)
         }
         .padding(Space.sm)
@@ -84,7 +84,7 @@ private struct AccentPreview: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("Scripts").font(.headline)
                 Spacer()
-                Text("2 takes").font(.caption).foregroundStyle(Palette.accentText)
+                Text("2 clips").font(.caption).foregroundStyle(Palette.accentText)
             }
             task("A quiet morning", done: true)
             task("Opening narration", done: false, tag: "Ready")

@@ -20,7 +20,7 @@ enum Store {
 enum SidebarItem: String, CaseIterable, Identifiable {
     case scripts, takes, editor, voices
     var id: String { rawValue }
-    var title: String { rawValue.capitalized }
+    var title: String { self == .takes ? "Clips" : rawValue.capitalized }
     var symbol: String {
         switch self { case .scripts: "doc.text"; case .takes: "waveform"; case .editor: "slider.horizontal.below.rectangle"; case .voices: "person.wave.2" }
     }
@@ -220,20 +220,20 @@ final class AppModel {
         preferences.takesFolder.map { URL(fileURLWithPath: $0, isDirectory: true) } ?? Store.root.appending(path: "Audio", directoryHint: .isDirectory)
     }
     func setTakesFolder(_ folder: URL?) throws {
-        guard !queueRunning else { throw LibraryFile.failure("Stop the queue before changing the takes folder.") }
+        guard !queueRunning else { throw LibraryFile.failure("Stop the queue before changing the clips folder.") }
         if let folder { try validateTakesFolder(folder) }
         preferences.takesFolder = folder?.standardizedFileURL.path
     }
     private func validateTakesFolder(_ folder: URL) throws {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory), isDirectory.boolValue else {
-            throw LibraryFile.failure("The takes folder is unavailable. Reconnect the drive or choose a folder in Settings > Storage.")
+            throw LibraryFile.failure("The clips folder is unavailable. Reconnect the drive or choose a folder in Settings > Storage.")
         }
         let probe = folder.appending(path: ".VoiceStudio-\(UUID().uuidString).tmp")
         do {
             try Data().write(to: probe, options: .atomic)
             try FileManager.default.removeItem(at: probe)
-        } catch { throw LibraryFile.failure("VoiceStudio cannot write to this takes folder. Choose another folder in Settings > Storage.") }
+        } catch { throw LibraryFile.failure("VoiceStudio cannot write to this clips folder. Choose another folder in Settings > Storage.") }
     }
     private func prepareTakeStorage() -> Bool {
         do {
@@ -354,7 +354,7 @@ final class AppModel {
         progress = "Queue stopped"
     }
     func retry(_ take: SpeechTake) {
-        guard ![.queued, .running].contains(take.status), prepareTakeStorage() else { return }
+        guard take.importedFilename == nil, ![.queued, .running].contains(take.status), prepareTakeStorage() else { return }
         // A retry is a new take. Original audio/metadata remain immutable for the future editor.
         let script = ScriptDocument(title: take.title, text: take.text)
         var copy = SpeechTake(script: script, voiceName: take.voiceName, speaker: take.speaker, references: take.references,
@@ -369,15 +369,15 @@ final class AppModel {
         guard ![.queued, .running].contains(take.status) else { return }
         library.takes.removeAll { $0.id == take.id }; selectedTake = nil
         undo?.registerUndo(withTarget: self) { model in model.library.takes.append(take) }
-        undo?.setActionName("Remove Take")
+        undo?.setActionName("Remove Clip")
     }
     func play(_ take: SpeechTake) {
         do { try playback.toggle(take.audioURL(relativeTo: Store.root)) }
-        catch { message = "Unable to play this take: \(error.localizedDescription)" }
+        catch { message = "Unable to play this clip: \(error.localizedDescription)" }
     }
     func export(_ take: SpeechTake) {
         let panel = NSSavePanel(); panel.allowedContentTypes = [.wav]
-        panel.nameFieldStringValue = "\(take.title.replacingOccurrences(of: "/", with: "-"))-take-\(take.number).wav"
+        panel.nameFieldStringValue = "\(take.title.replacingOccurrences(of: "/", with: "-"))-clip-\(take.number).wav"
         guard panel.runModal() == .OK, let destination = panel.url else { return }
         do { try copyTake(take, to: destination) }
         catch { message = "Unable to export audio: \(error.localizedDescription)" }
@@ -389,7 +389,7 @@ final class AppModel {
     func shutdown() {
         installer.cancel()
         queueRunning = false
-        if let id = activeTake { mutateTake(id) { $0.status = .failed; $0.error = "Generation was interrupted when the app quit. Retry this take." } }
+        if let id = activeTake { mutateTake(id) { $0.status = .failed; $0.error = "Generation was interrupted when the app quit. Retry this clip." } }
         engine.stop(); playback.stop(); save()
     }
 }

@@ -22,11 +22,11 @@ struct ContentView: View {
                     }
                     if model.queueRunning {
                         ProgressView(value: Double(model.completedInBatch), total: Double(max(1, model.batchTotal)))
-                        Text("\(model.completedInBatch) of \(model.batchTotal) takes finished").font(.caption).foregroundStyle(.secondary)
+                        Text("\(model.completedInBatch) of \(model.batchTotal) clips finished").font(.caption).foregroundStyle(.secondary)
                         Text(model.progress).font(.caption).foregroundStyle(.secondary).lineLimit(2).help(model.progress)
                         Button("Stop Queue", systemImage: "stop.fill") { model.stopQueue() }
                     } else if model.queuedCount > 0 {
-                        Button("Resume \(model.queuedCount) Queued Takes") { model.resumeQueue() }
+                        Button("Resume \(model.queuedCount) Queued Clips") { model.resumeQueue() }
                     }
                 }
                 .padding(Space.lg)
@@ -162,8 +162,8 @@ struct GenerationControls: View {
                     Picker("Language", selection: $model.preferences.language) {
                         ForEach(Languages.all, id: \.0) { code, name in Text(name).tag(code) }
                     }.labelsHidden()
-                    Stepper("Takes: \(model.preferences.takes)", value: $model.preferences.takes, in: 1...20)
-                        .help("Generate this many alternate takes for each selected script")
+                    Stepper("Clips: \(model.preferences.takes)", value: $model.preferences.takes, in: 1...20)
+                        .help("Generate this many alternate clips for each selected script")
                 }
                 GridRow {
                     Text("Speed").foregroundStyle(.secondary)
@@ -175,12 +175,12 @@ struct GenerationControls: View {
                 }
             }
             HStack(spacing: Space.md) {
-                Text("\(model.selectedScripts.count) \(model.selectedScripts.count == 1 ? "script" : "scripts") × \(model.preferences.takes) \(model.preferences.takes == 1 ? "take" : "takes")")
+                Text("\(model.selectedScripts.count) \(model.selectedScripts.count == 1 ? "script" : "scripts") × \(model.preferences.takes) \(model.preferences.takes == 1 ? "clip" : "clips")")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("Generate Selected", systemImage: "waveform.badge.plus") { model.queue() }
                     .buttonStyle(.borderedProminent).disabled(!model.canGenerate)
-                    .help("Generate takes for the selected scripts (Command-G)")
+                    .help("Generate clips for the selected scripts (Command-G)")
             }
         }
     }
@@ -223,7 +223,7 @@ struct VoiceDetail: View {
                         Text(voice.name).font(.title2).textSelection(.enabled)
                         Text(voice.cachedFile == nil ? "Cloned voice · \(voice.files.count) reference \(voice.files.count == 1 ? "clip" : "clips")" : "Cloned voice · imported XTTS cache").foregroundStyle(.secondary)
                     }.gridProbe("voice-title", area: "voice-page")
-                    Text(voice.cachedFile == nil ? "Use clean speech with a single speaker and little background noise. Around 6–15 seconds per clip is a useful starting point." : "This voice uses saved XTTS conditioning. The original reference recordings are not required. Generate a take to preview it.")
+                    Text(voice.cachedFile == nil ? "Use clean speech with a single speaker and little background noise. Around 6–15 seconds per clip is a useful starting point." : "This voice uses saved XTTS conditioning. The original reference recordings are not required. Generate a clip to preview it.")
                         .foregroundStyle(.secondary).gridProbe("voice-guidance", area: "voice-page")
                     VStack(alignment: .leading, spacing: Space.lg) {
                         ForEach(Array(voice.files.enumerated()), id: \.offset) { index, file in

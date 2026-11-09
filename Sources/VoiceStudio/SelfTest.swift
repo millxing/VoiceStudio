@@ -94,7 +94,7 @@ enum SelfTest {
                 model.removeScripts(selected, undo: undo)
                 undo.undo()
                 check("Removing scripts can be undone", selected.isSubset(of: Set(model.scripts.map(\.id))))
-                if let sample = Bundle.main.resourceURL?.appending(path: "demo-reference.wav") {
+                if let sample = Bundle.main.resourceURL?.appending(path: "demo-reference.wav"), FileManager.default.fileExists(atPath: sample.path) {
                     try model.storeVoice(name: "Test narrator", urls: [sample, sample], existing: nil)
                     check("Voice copies multiple references", model.voices.last?.files.count == 2)
                 }
@@ -201,6 +201,13 @@ enum SelfTest {
         model.toggleTimelinePlayback()
         try await Task.sleep(for: .milliseconds(300))
         check("Timeline preview plays with looping", model.isPlayingTimeline && model.playback.isPlaying && model.timelineTime > 0)
+        model.seekTimeline(0)
+        // Mouse tracking uses a different run-loop mode; the playhead must still redraw.
+        let trackingStart = model.playback.position
+        runMouseTracking(for: 0.18)
+        check("Playhead updates during mouse tracking", model.playback.position > trackingStart + 0.05)
+        try await Task.sleep(for: .milliseconds(30))
+        check("Restarted playhead advances immediately", model.timelineTime > 0.05 && model.timelineTime < 0.4)
         model.toggleTimelinePlayback()
         check("Timeline preview pauses", !model.playback.isPlaying)
         model.playback.stop(); model.playback.loops = false
@@ -216,6 +223,28 @@ enum SelfTest {
         check("Muting every track leaves nothing to export", (try? model.exportTimeline(.wav, to: wav)) == nil)
         model.setTrack(0, muted: false, undo: undo); model.setTrack(1, muted: false, undo: undo)
         check("The timeline survives reopening", try LibraryFile.load(from: Store.url).timeline == model.timeline)
+        let beforeImport = model.timeline.clips.count
+        check("External WAV imports onto the requested track", model.importAudio([wav], track: 2, at: 4, undo: nil)
+            && model.clip?.track == 2 && model.clip?.start == 4 && model.timeline.clips.count == beforeImport + 1)
+        if let imported = model.clip, let source = model.takeFor(imported) {
+            let importedDuration = try AudioValidation.validate(source.audioURL(relativeTo: Store.root))
+            check("Imported audio has a private readable copy", source.audioURL(relativeTo: Store.root) != wav
+                && abs(importedDuration - source.duration) < 0.01)
+            let data = try JSONEncoder().encode(imported)
+            model.seekTimeline(8)
+            let pasteUndo = UndoManager()
+            model.pasteClip(data, undo: pasteUndo)
+            check("Pasting preserves source and trim with a new identity", model.clip?.takeID == imported.takeID
+                && model.clip?.id != imported.id && model.clip?.inPoint == imported.inPoint && model.clip?.start == 8)
+            pasteUndo.undo()
+            check("Pasting can be undone", model.timeline.clips.count == beforeImport + 1)
+
+        }
+        if TimelineAudio.mp3Encoder != nil {
+            let mp3 = Store.root.appending(path: "Timeline.mp3")
+            check("External MP3 imports and decodes", model.importAudio([mp3], track: 2, undo: nil))
+        }
+        check("Unsupported external files are rejected", !model.importAudio([Store.root.appending(path: "Import.txt")], undo: nil))
         try await gestureChecks(model, take: made[0])
     }
 
@@ -257,6 +286,46 @@ enum SelfTest {
         check("A clip dropped near the start snaps to it", clip()?.start == 0)
         await click(point(1.25, lane: -1), in: window)
         check("Clicking the ruler moves the playhead", near(model.playhead, 1.25))
+        await drag(from: point(1.25, lane: -1), to: point(2.25, lane: -1), in: window)
+        check("Dragging the playhead handle scrubs manually", near(model.playhead, 2.25))
+        let original = clip()
+        await drag(from: point(0.75, lane: 1), to: point(4.75, lane: 2), in: window, modifiers: .option)
+        check("Option-drag duplicates without moving the original", model.timeline.clips.count == 2 && clip() == original
+            && model.clip?.id != id && model.clip?.track == 2 && near(model.clip?.start, 4))
+        window.undoManager?.undo()
+        check("Option-drag is one undo step", model.timeline.clips.count == 1 && clip() == original)
+        await click(point(0.75, lane: 1), in: window)
+        window.makeKey()
+        await click(point(0.75, lane: 1), in: window)
+        if let keyboard = window.firstResponder as? TimelineKeyView {
+            // Exercise native editing without replacing the person's system clipboard.
+            let pasteboard = NSPasteboard.withUniqueName()
+            keyboard.pasteboard = pasteboard
+            keyboard.copy(nil)
+            check("Native Copy writes the selected clip", pasteboard.data(forType: .init(AppModel.clipPasteboardType)) != nil)
+            model.seekTimeline(5)
+            keyboard.paste(nil)
+            try await Task.sleep(for: .milliseconds(100))
+            check("Native Paste inserts at the playhead", model.timeline.clips.count == 2 && near(model.clip?.start, 5))
+            window.undoManager?.undo()
+            await click(point(0.75, lane: 1), in: window)
+            keyboard.cut(nil)
+            try await Task.sleep(for: .milliseconds(100))
+            check("Native Cut removes the selected clip", model.timeline.isEmpty)
+            window.undoManager?.undo()
+            keyboard.pasteboard = .general
+            pasteboard.releaseGlobally()
+            await click(point(0.75, lane: 1), in: window)
+        } else { check("Timeline receives native keyboard focus", false) }
+        if let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil,
+            characters: "\u{7f}", charactersIgnoringModifiers: "\u{7f}", isARepeat: false, keyCode: 51) {
+            window.sendEvent(event)
+        }
+        try await Task.sleep(for: .milliseconds(250))
+        check("Delete key removes the selected timeline clip", model.timeline.isEmpty)
+        window.undoManager?.undo()
+        check("Keyboard deletion can be undone", model.timeline.clips.count == 1)
         await click(point(6, lane: 2), in: window)
         check("Clicking an empty track clears the selection", model.selectedClip == nil)
         try await Task.sleep(for: .milliseconds(300))
@@ -279,9 +348,9 @@ enum SelfTest {
         }
         if let root = window.contentView { visit(root) }
     }
-    static func mouse(_ type: NSEvent.EventType, at point: CGPoint, in window: NSWindow) {
+    static func mouse(_ type: NSEvent.EventType, at point: CGPoint, in window: NSWindow, modifiers: NSEvent.ModifierFlags = []) {
         let height = window.contentView?.frame.height ?? window.frame.height
-        guard let event = NSEvent.mouseEvent(with: type, location: NSPoint(x: point.x, y: height - point.y), modifierFlags: [],
+        guard let event = NSEvent.mouseEvent(with: type, location: NSPoint(x: point.x, y: height - point.y), modifierFlags: modifiers,
             timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil,
             eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1) else { return }
         // Posted to this app's own queue, so the event loop dispatches it as it would a real click
@@ -294,16 +363,22 @@ enum SelfTest {
         mouse(.leftMouseUp, at: point, in: window)
         try? await Task.sleep(for: .milliseconds(250))
     }
-    static func drag(from start: CGPoint, to end: CGPoint, in window: NSWindow) async {
-        mouse(.leftMouseDown, at: start, in: window)
+    static func drag(from start: CGPoint, to end: CGPoint, in window: NSWindow, modifiers: NSEvent.ModifierFlags = []) async {
+        mouse(.leftMouseDown, at: start, in: window, modifiers: modifiers)
         try? await Task.sleep(for: .milliseconds(30))
         for step in 1...12 {
             let f = CGFloat(step) / 12
-            mouse(.leftMouseDragged, at: CGPoint(x: start.x + (end.x - start.x) * f, y: start.y + (end.y - start.y) * f), in: window)
+            mouse(.leftMouseDragged, at: CGPoint(x: start.x + (end.x - start.x) * f, y: start.y + (end.y - start.y) * f), in: window, modifiers: modifiers)
             try? await Task.sleep(for: .milliseconds(16))
         }
-        mouse(.leftMouseUp, at: end, in: window)
+        mouse(.leftMouseUp, at: end, in: window, modifiers: modifiers)
         try? await Task.sleep(for: .milliseconds(250))
+    }
+    static func runMouseTracking(for seconds: Double) {
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline {
+            _ = RunLoop.main.run(mode: .eventTracking, before: Date().addingTimeInterval(0.01))
+        }
     }
     static func finish(code: Int32) {
         exitCode = code

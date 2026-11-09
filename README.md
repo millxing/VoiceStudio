@@ -1,7 +1,7 @@
 # VoiceStudio
 
 A native macOS app for local XTTS speech generation and voice cloning, with
-Apple GPU acceleration, batch text conversion, and multiple takes per script.
+Apple GPU acceleration, batch text conversion, and multiple clips per script.
 
 **Requirements:** Apple Silicon, macOS 26 or later, and about 8 GB of free space
 for engine setup. Internet access is required for the initial downloads.
@@ -33,7 +33,7 @@ a notarized binary download.
 
 Open `/Applications/VoiceStudio.app`. Complete setup if prompted. The engine then warms up in the background;
 its status is shown at the bottom of the sidebar. Initial loading takes longer
-than generating another take with the already-loaded model.
+than generating another clip with the already-loaded model.
 
 1. In **Voices**, choose **Add Voice…**. Name the voice and import one or more
    reference clips, or record your own microphone. Preview and save it. Use
@@ -42,11 +42,11 @@ than generating another take with the already-loaded model.
    Multiple files can be selected together. UTF-8 and UTF-16 with a byte-order
    mark are accepted; each file becomes an editable, autosaved script.
 3. Select one or more scripts with Command-click or Shift-click. Choose a
-   voice, language, speed, and **Takes** count (1–20 per script).
+   voice, language, speed, and **Clips** count (1–20 per script).
 4. Choose **Generate Selected** (Command-G), or Speech > **Generate All**.
-   Alternate takes have different random seeds. Work is processed sequentially.
-5. In **Takes**, listen, seek, compare, **Export Take…** as WAV, or reveal it in
-   Finder. Every take keeps its text, voice, model, speed, language, and seed.
+   Alternate clips have different random seeds. Work is processed sequentially.
+5. In **Clips**, listen, seek, compare, **Export Clip…** as WAV, or reveal it in
+   Finder. Every clip keeps its text, voice, model, speed, language, and seed.
 
 ### Import a saved XTTS voice (.pth)
 
@@ -69,11 +69,11 @@ checkpoints are rejected with an explanation. Full model files belong in
 Settings > Engine, not the voice importer.
 
 Existing version-one and version-two libraries upgrade automatically to version three while
-retaining scripts, reference voices, and takes. Older app versions will reject
-the upgraded library rather than misreading custom take locations or cached voices.
+retaining scripts, reference voices, and clips. Older app versions will reject
+the upgraded library rather than misreading custom clip locations or cached voices.
 
-**Stop Queue** cancels the current and queued work; completed takes stay saved.
-A failed/canceled take can be retried as a new take with the same settings and
+**Stop Queue** cancels the current and queued work; completed clips stay saved.
+A failed/canceled clip can be retried as a new clip with the same settings and
 seed. Interrupted jobs become failed at next launch, and queued work can resume.
 Long scripts are split at sentence/word boundaries within both the model's
 character guidance and token limit, then joined with short pauses into one WAV
@@ -119,20 +119,30 @@ review with your own scripts. Microphone recording needs first-use macOS consent
 Use the sidebar gear or Command-comma to open Settings. **Appearance** offers
 System, Light and Dark modes, plus the accent color. The choices are saved.
 
-In **Settings → Storage**, choose the folder for new take WAVs, including a folder
-on another drive, or choose **Use Default Folder** to reset it. Existing takes
+In **Settings → Storage**, choose the folder for new clip WAVs, including a folder
+on another drive, or choose **Use Default Folder** to reset it. Existing clips
 stay where they were generated; playback, export and Finder reveal keep using
 their saved locations. Retries use the currently selected folder. Folder changes
 are unavailable while the queue runs. Reconnect an unavailable drive or choose
-a writable folder before generating more takes.
+a writable folder before generating more clips.
 
 Scripts, voice-reference copies, settings and the engine log live under
-`~/Library/Application Support/VoiceStudio/`. Take WAVs default to its `Audio`
-folder. Back up the library and any custom takes folders. Source
+`~/Library/Application Support/VoiceStudio/`. Clip WAVs default to its `Audio`
+folder. Back up the library and any custom clips folders. Source
 text is stored in `Library.json`, so moving an imported text file is harmless.
-Remove actions can be undone with Command-Z. Removing a voice/take from the
-library retains its audio for Undo, existing takes, and future editing. This
+Remove actions can be undone with Command-Z. Removing a voice/clip from the
+library retains its audio for Undo, existing clips, and future editing. This
 first version does not automatically purge unused source audio.
+
+### Timeline editing
+
+Drop WAV or MP3 files from Finder onto an editor track at the desired time, or
+choose **File > Import Audio Clips…**. Imported audio is copied into the library.
+Drag the playhead handle or ruler to scrub. Select a timeline clip, then use
+**Command-X/C/V** to cut/copy/paste; paste places it at the playhead on its original
+track. **Option-drag** duplicates a clip. **Delete** removes it; **Shift-Delete**
+also closes the gap. These timeline edits support Undo.
+
 
 ## Build and verify
 

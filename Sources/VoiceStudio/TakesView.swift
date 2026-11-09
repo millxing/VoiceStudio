@@ -21,22 +21,22 @@ struct TakeList: View {
                 .contextMenu {
                     if take.status == .completed {
                         Button("Play/Pause") { model.play(take) }
-                        Button("Export Take…") { model.export(take) }
+                        Button("Export Clip…") { model.export(take) }
                         Button("Show in Finder") { model.reveal(take) }
                     }
                     if ![.queued, .running].contains(take.status) {
-                        Button("Generate Again") { model.retry(take) }
-                        Button("Remove Take", role: .destructive) { model.removeTake(take, undo: undo) }
+                        if take.importedFilename == nil { Button("Generate Again") { model.retry(take) } }
+                        Button("Remove Clip", role: .destructive) { model.removeTake(take, undo: undo) }
                     }
                 }
         }
         .overlay {
             if model.takes.isEmpty {
-                ContentUnavailableView("No Takes", systemImage: "waveform", description: Text("Generate speech from Scripts. Every take will be saved here."))
+                ContentUnavailableView("No Clips", systemImage: "waveform", description: Text("Generate speech from Scripts. Every clip will be saved here."))
             } else if visible.isEmpty { ContentUnavailableView.search(text: search) }
         }
-        .searchable(text: $search, prompt: "Find a take or voice")
-        .navigationTitle("Takes")
+        .searchable(text: $search, prompt: "Find a clip or voice")
+        .navigationTitle("Clips")
         .navigationSplitViewColumnWidth(min: 220, ideal: 280, max: 400)
     }
 }
@@ -53,15 +53,15 @@ struct TakeDetail: View {
                     if take.status == .completed {
                         AudioTransport(url: take.audioURL(relativeTo: Store.root)).gridProbe("take-player", area: "take-page")
                         HStack(spacing: Space.sm) {
-                            Button("Export Take…", systemImage: "square.and.arrow.up") { model.export(take) }
+                            Button("Export Clip…", systemImage: "square.and.arrow.up") { model.export(take) }
                             Button("Show in Finder", systemImage: "folder") { model.reveal(take) }
-                            Button("Generate Again") { model.retry(take) }
+                            if take.importedFilename == nil { Button("Generate Again") { model.retry(take) } }
                         }.gridProbe("take-actions", area: "take-page")
                     } else if take.status == .failed || take.status == .canceled {
                         VStack(alignment: .leading, spacing: Space.sm) {
                             Text(take.error.isEmpty ? "Generation was canceled. Your script and settings are retained." : take.error)
                                 .foregroundStyle(.secondary).textSelection(.enabled)
-                            Button("Retry as New Take") { model.retry(take) }
+                            Button("Retry as New Clip") { model.retry(take) }
                         }.gridProbe("take-error", area: "take-page")
                     } else {
                         HStack(spacing: Space.sm) {
@@ -70,26 +70,33 @@ struct TakeDetail: View {
                         }.gridProbe("take-progress", area: "take-page")
                     }
                     Grid(alignment: .leading, horizontalSpacing: Space.xl, verticalSpacing: Space.sm) {
-                        metadata("Voice", take.voiceName)
-                        metadata("Voice source", take.cachedVoice != nil ? "Imported XTTS cache" : (take.references.isEmpty ? "Built-in voice" : "Reference audio"))
-                        metadata("Language", Languages.name(take.language))
-                        metadata("Speed", String(format: "%.2f×", take.speed))
-                        metadata("Model", take.modelName)
-                        metadata("Device", take.device == "mps" ? "Apple GPU" : "CPU")
-                        metadata("Seed", String(take.seed))
-                        if take.status == .completed {
+                        if let filename = take.importedFilename {
+                            metadata("Source file", filename)
                             metadata("Duration", String(format: "%.2f seconds", take.duration))
-                            metadata("Generated in", String(format: "%.2f seconds", take.generationSeconds))
+                        } else {
+                            metadata("Voice", take.voiceName)
+                            metadata("Voice source", take.cachedVoice != nil ? "Imported XTTS cache" : (take.references.isEmpty ? "Built-in voice" : "Reference audio"))
+                            metadata("Language", Languages.name(take.language))
+                            metadata("Speed", String(format: "%.2f×", take.speed))
+                            metadata("Model", take.modelName)
+                            metadata("Device", take.device == "mps" ? "Apple GPU" : "CPU")
+                            metadata("Seed", String(take.seed))
+                            if take.status == .completed {
+                                metadata("Duration", String(format: "%.2f seconds", take.duration))
+                                metadata("Generated in", String(format: "%.2f seconds", take.generationSeconds))
+                            }
                         }
                     }.font(.callout).textSelection(.enabled).gridProbe("take-metadata", area: "take-page")
-                    VStack(alignment: .leading, spacing: Space.sm) {
-                        Text("Source Text").font(.headline)
-                        Text(take.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-                    }.gridProbe("take-source", area: "take-page")
+                    if take.importedFilename == nil {
+                        VStack(alignment: .leading, spacing: Space.sm) {
+                            Text("Source Text").font(.headline)
+                            Text(take.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                        }.gridProbe("take-source", area: "take-page")
+                    }
                 }.padding(Space.margin).frame(maxWidth: .infinity, alignment: .leading).gridArea("take-page")
             }
         } else {
-            ContentUnavailableView("Select a Take", systemImage: "waveform", description: Text("Listen to alternate takes, inspect their settings, and export audio."))
+            ContentUnavailableView("Select a Clip", systemImage: "waveform", description: Text("Listen to alternate clips, inspect their settings, and export audio."))
         }
     }
     private func metadata(_ key: String, _ value: String) -> some View {

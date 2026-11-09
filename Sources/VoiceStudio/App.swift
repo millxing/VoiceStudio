@@ -53,6 +53,7 @@ struct VoiceStudioApp: App {
             ToolbarCommands()
             CommandGroup(replacing: .newItem) {
                 Button("New Script") { model.addScript() }.keyboardShortcut("n")
+                Button("Import Audio Clips…") { model.sidebar = .editor; model.importAudio(undo: NSApp.keyWindow?.undoManager) }
                 Button("Import Text Files…") { model.importScripts() }.keyboardShortcut("o")
                 Button("Add Voice…") { model.addVoice() }.keyboardShortcut("v", modifiers: [.command, .shift])
             }
@@ -75,21 +76,21 @@ struct VoiceStudioApp: App {
                 Toggle("Loop Playback", isOn: Binding(get: { model.playback.loops }, set: { model.playback.loops = $0 }))
                     .keyboardShortcut("l")
                 Divider()
-                Button("Export Take…") { if let take = model.take { model.export(take) } }
+                Button("Export Clip…") { if let take = model.take { model.export(take) } }
                     .keyboardShortcut("e", modifiers: [.command, .shift]).disabled(!menu.canPlay)
                 Button("Show in Finder") { if let take = model.take { model.reveal(take) } }
                     .keyboardShortcut("r", modifiers: [.command, .shift]).disabled(!menu.canPlay)
             }
             CommandMenu("Editor") {
-                Button("Add Selected Take to Timeline") { if let take = model.take { model.addToTimeline(take, track: 0, undo: NSApp.keyWindow?.undoManager) } }
+                Button("Add Selected Clip to Timeline") { if let take = model.take { model.addToTimeline(take, track: 0, undo: NSApp.keyWindow?.undoManager) } }
                     .keyboardShortcut("a", modifiers: [.command, .shift]).disabled(!menu.canAddTake)
                 Divider()
                 Button("Split at Playhead") { model.splitAtPlayhead(undo: NSApp.keyWindow?.undoManager) }
                     .keyboardShortcut("b").disabled(!menu.inEditor || !menu.hasTimeline)
                 Button("Delete Clip") { model.deleteClip(ripple: false, undo: NSApp.keyWindow?.undoManager) }
-                    .keyboardShortcut(.delete, modifiers: .command).disabled(!menu.hasClip)
+                    .disabled(!menu.hasClip)
                 Button("Ripple Delete Clip") { model.deleteClip(ripple: true, undo: NSApp.keyWindow?.undoManager) }
-                    .keyboardShortcut(.delete, modifiers: [.command, .shift]).disabled(!menu.hasClip)
+                    .disabled(!menu.hasClip)
                 Button("Go to Start") { model.seekTimeline(0) }
                     .keyboardShortcut(.home, modifiers: []).disabled(!menu.inEditor)
                 Divider()
@@ -102,7 +103,7 @@ struct VoiceStudioApp: App {
                     .keyboardShortcut("e", modifiers: [.command, .option, .shift]).disabled(!menu.hasTimeline)
                 Divider()
                 Button("Clear Timeline") { model.clearTimeline(undo: NSApp.keyWindow?.undoManager) }
-                    .keyboardShortcut(.delete, modifiers: [.command, .option]).disabled(!menu.hasTimeline)
+                    .disabled(!menu.hasTimeline)
             }
         }
         Settings { SettingsView().environment(model).themed() }.windowResizability(.contentSize)
