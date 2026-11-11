@@ -17,7 +17,7 @@ final class StudioMenuState: ObservableObject {
         inEditor = model.sidebar == .editor
         hasClip = inEditor && model.selectedClip != nil
         hasTimeline = !model.timeline.isEmpty
-        canAddTake = model.take?.status == .completed
+        canAddTake = model.editorTakes.contains { model.selectedTakes.contains($0.id) }
         canGenerate = model.canGenerate
         hasScripts = model.scripts.contains { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         canStop = model.queueRunning
@@ -39,10 +39,10 @@ struct VoiceStudioApp: App {
                 .frame(minWidth: 1080, minHeight: 720)
                 .onChange(of: model.library, initial: true) { menu.update(model) }
                 .onChange(of: model.selectedScripts) { menu.update(model) }
-                .onChange(of: model.selectedTake) { menu.update(model) }
+                .onChange(of: model.selectedTakes) { menu.update(model) }
                 .onChange(of: model.queueRunning) { menu.update(model) }
                 .onChange(of: model.sidebar) { menu.update(model) }
-                .onChange(of: model.selectedClip) { menu.update(model) }
+                .onChange(of: model.selectedClips) { menu.update(model) }
                 .task { delegate.model = model }
         }
         .defaultLaunchBehavior(.presented)
@@ -87,14 +87,14 @@ struct VoiceStudioApp: App {
                 Button("Save Timeline…") { model.saveTimeline() }.keyboardShortcut("s", modifiers: [.command, .shift])
                 Button("Load Timeline…") { model.loadTimeline(undo: NSApp.keyWindow?.undoManager) }.keyboardShortcut("o", modifiers: [.command, .shift])
                 Divider()
-                Button("Add Selected Clip to Timeline") { if let take = model.take { model.addToTimeline(take, track: 0, undo: NSApp.keyWindow?.undoManager) } }
+                Button("Add Selected Clips to Timeline") { model.addTakesToTimeline(model.selectedTakes, track: 0, undo: NSApp.keyWindow?.undoManager) }
                     .keyboardShortcut("a", modifiers: [.command, .shift]).disabled(!menu.canAddTake)
                 Divider()
                 Button("Split at Playhead") { model.splitAtPlayhead(undo: NSApp.keyWindow?.undoManager) }
                     .keyboardShortcut("b").disabled(!menu.inEditor || !menu.hasTimeline)
-                Button("Delete Clip") { model.deleteClip(ripple: false, undo: NSApp.keyWindow?.undoManager) }
+                Button("Delete Selected Clips") { model.deleteClip(ripple: false, undo: NSApp.keyWindow?.undoManager) }
                     .disabled(!menu.hasClip)
-                Button("Ripple Delete Clip") { model.deleteClip(ripple: true, undo: NSApp.keyWindow?.undoManager) }
+                Button("Ripple Delete Selected Clips") { model.deleteClip(ripple: true, undo: NSApp.keyWindow?.undoManager) }
                     .disabled(!menu.hasClip)
                 Button("Go to Start") { model.seekTimeline(0) }
                     .keyboardShortcut(.home, modifiers: []).disabled(!menu.inEditor)

@@ -92,6 +92,7 @@ enum SelfTest {
                 let undo = UndoManager()
                 let selected = model.selectedScripts
                 model.removeScripts(selected, undo: undo)
+                check("Removing selected scripts deletes every selected document", selected.isDisjoint(with: Set(model.scripts.map(\.id))))
                 undo.undo()
                 check("Removing scripts can be undone", selected.isSubset(of: Set(model.scripts.map(\.id))))
                 if let sample = Bundle.main.resourceURL?.appending(path: "demo-reference.wav"), FileManager.default.fileExists(atPath: sample.path) {
@@ -160,6 +161,12 @@ enum SelfTest {
                     check("Missing interpreter reports an actionable error", !model.engine.lastError.isEmpty && !model.queueRunning)
                     model.stopQueue()
                     check("Stop Queue cancels pending work", model.library.takes.allSatisfy { $0.status == .canceled })
+                    let originals = model.library.takes
+                    model.selectedTakes = Set(originals.prefix(2).map(\.id))
+                    model.retryTakes(model.selectedTakes)
+                    check("Generate Again enqueues a new clip for every selected source", model.library.takes.count == originals.count + 2
+                        && model.library.takes.suffix(2).allSatisfy { $0.status == .queued })
+                    model.stopQueue()
                 }
                 try await editorChecks(model)
                 check("Sidebar order is Scripts, Takes, Editor, Voices", SidebarItem.allCases == [.scripts, .takes, .editor, .voices])
@@ -182,6 +189,7 @@ enum SelfTest {
             model.library.takes.append(take); made.append(take)
         }
         model.sidebar = .editor
+        try multiSelectionChecks(model, sources: made)
         let undo = UndoManager()
         model.addToTimeline(made[0], track: 0, undo: undo)
         model.addToTimeline(made[1], track: 1, at: 0.5, undo: undo)
@@ -248,6 +256,60 @@ enum SelfTest {
         check("Unsupported external files are rejected", !model.importAudio([Store.root.appending(path: "Import.txt")], undo: nil))
         try await documentAndLoopChecks(model)
         try await gestureChecks(model, take: made[0])
+    }
+
+    static func multiSelectionChecks(_ model: AppModel, sources: [SpeechTake]) throws {
+        let original = model.timeline
+        let ids = Set(sources.map(\.id))
+        model.selectedTakes = ids
+        let addUndo = UndoManager()
+        model.addTakesToTimeline(model.selectedTakes, track: 1, undo: addUndo)
+        let added = model.clips
+        check("Adding selected source clips places both in displayed order", added.count == 2
+            && added.map(\.takeID) == model.editorTakes.filter { ids.contains($0.id) }.map(\.id)
+            && added[1].start == added[0].end && added.allSatisfy { $0.track == 1 })
+        addUndo.undo()
+        check("Adding multiple source clips is one undo step", model.timeline == original)
+
+        var timeline = Timeline()
+        let first = timeline.add(takeID: sources[0].id, duration: 2, track: 0, at: 1).id
+        let second = timeline.add(takeID: sources[1].id, duration: 3, track: 2, at: 4).id
+        model.setTimeline(timeline, action: "Selection Test", undo: nil)
+        model.selectClip(first)
+        model.selectClip(second, modifiers: .shift)
+        check("Shift-click adds to the timeline selection", model.selectedClips == [first, second])
+        model.selectClip(second, modifiers: .command)
+        check("Command-click toggles a selected timeline clip off", model.selectedClips == [first])
+        model.selectClip(second, modifiers: .command)
+        let data = model.copyClips()!
+        model.seekTimeline(10)
+        let pasteUndo = UndoManager()
+        model.pasteClip(data, undo: pasteUndo)
+        check("Copy and paste preserve multiple clips, tracks, and relative spacing", model.clips.count == 2
+            && model.clips.map(\.start) == [10, 13] && model.clips.map(\.track) == [0, 2]
+            && model.selectedClips.isDisjoint(with: [first, second]))
+        pasteUndo.undo()
+        check("Pasting multiple clips is one undo step", model.timeline == timeline)
+        model.selectedClips = [first, second]
+        let deleteUndo = UndoManager()
+        model.deleteClip(ripple: false, undo: deleteUndo)
+        check("Delete removes every selected timeline clip", model.timeline.isEmpty && model.selectedClips.isEmpty)
+        deleteUndo.undo()
+        check("Deleting multiple clips is one undo step", model.timeline == timeline)
+        model.selectedClips = [first, second]
+        model.deleteClip(ripple: true, undo: nil)
+        check("Ripple delete removes the full selection across tracks", model.timeline.isEmpty)
+        model.setTimeline(original, action: "Restore Selection Test", undo: nil)
+        model.seekTimeline(0)
+
+        let removeUndo = UndoManager()
+        model.selectedTakes = ids
+        model.removeTakes(ids, undo: removeUndo)
+        check("Source removal deletes every selected clip", ids.isDisjoint(with: Set(model.library.takes.map(\.id)))
+            && model.selectedTakes.isEmpty)
+        removeUndo.undo()
+        check("Removing multiple source clips can be undone together", ids.isSubset(of: Set(model.library.takes.map(\.id)))
+            && model.selectedTakes == ids)
     }
 
     static func documentAndLoopChecks(_ model: AppModel) async throws {
@@ -341,6 +403,36 @@ enum SelfTest {
             && model.clip?.id != id && model.clip?.track == 2 && near(model.clip?.start, 4))
         window.undoManager?.undo()
         check("Option-drag is one undo step", model.timeline.clips.count == 1 && clip() == original)
+        model.addToTimeline(take, track: 2, at: 4, undo: nil)
+        let other = model.selectedClip!
+        await click(point(0.75, lane: 1), in: window)
+        await click(point(4.75, lane: 2), in: window, modifiers: .shift)
+        check("Rendered Shift-click keeps both timeline clips selected", model.selectedClips == [id, other])
+        await drag(from: point(4.75, lane: 2), to: point(5.75, lane: 2), in: window)
+        check("Dragging selected clips moves them as a group", near(clip()?.start, 1)
+            && near(model.timeline.clips.first { $0.id == other }?.start, 5) && model.selectedClips.count == 2)
+        window.undoManager?.undo()
+        await click(point(0.75, lane: 1), in: window)
+        await click(point(4.75, lane: 2), in: window, modifiers: .shift)
+        if let keyboard = window.firstResponder as? TimelineKeyView {
+            let pasteboard = NSPasteboard.withUniqueName()
+            keyboard.pasteboard = pasteboard
+            keyboard.copy(nil)
+            model.seekTimeline(8)
+            keyboard.paste(nil)
+            check("Native Copy/Paste includes the full timeline selection", model.timeline.clips.count == 4
+                && model.clips.count == 2 && model.clips.map(\.start) == [8, 12])
+            window.undoManager?.undo()
+            model.selectedClips = [id, other]
+            keyboard.cut(nil)
+            check("Native Cut removes the full timeline selection", model.timeline.isEmpty)
+            window.undoManager?.undo()
+            keyboard.pasteboard = .general
+            pasteboard.releaseGlobally()
+        } else { check("Multiple selection receives native keyboard focus", false) }
+        model.selectedClip = other
+        model.deleteClip(ripple: false, undo: nil)
+        model.seekTimeline(0)
         await click(point(0.75, lane: 1), in: window)
         window.makeKey()
         await click(point(0.75, lane: 1), in: window)
@@ -431,10 +523,10 @@ enum SelfTest {
         // (and closes the undo group after it). The system cursor never moves.
         NSApp.postEvent(event, atStart: false)
     }
-    static func click(_ point: CGPoint, in window: NSWindow) async {
-        mouse(.leftMouseDown, at: point, in: window)
+    static func click(_ point: CGPoint, in window: NSWindow, modifiers: NSEvent.ModifierFlags = []) async {
+        mouse(.leftMouseDown, at: point, in: window, modifiers: modifiers)
         try? await Task.sleep(for: .milliseconds(30))
-        mouse(.leftMouseUp, at: point, in: window)
+        mouse(.leftMouseUp, at: point, in: window, modifiers: modifiers)
         try? await Task.sleep(for: .milliseconds(250))
     }
     static func drag(from start: CGPoint, to end: CGPoint, in window: NSWindow, modifiers: NSEvent.ModifierFlags = []) async {

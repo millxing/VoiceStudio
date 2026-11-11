@@ -82,13 +82,15 @@ struct ScriptList: View {
                     Text(script.text.isEmpty ? "No text yet" : script.text.replacingOccurrences(of: "\n", with: " "))
                         .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 }.padding(.vertical, Space.xs).tag(script.id)
-                .contextMenu {
-                    Button("Generate Script") { model.selectedScripts = [script.id]; model.queue() }
-                        .disabled(script.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    Button("Remove Script", role: .destructive) { model.removeScripts([script.id], undo: undo) }
-                }
             }
         }
+        .contextMenu(forSelectionType: UUID.self) { ids in
+            Button("Generate Selected Scripts") { model.selectedScripts = ids; model.queue() }
+                .disabled(!model.scripts.contains { ids.contains($0.id) && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+            Button("Remove Selected Scripts", role: .destructive) { model.removeScripts(ids, undo: undo) }
+                .disabled(ids.isEmpty)
+        }
+        .onDeleteCommand { model.removeScripts(model.selectedScripts, undo: undo) }
         .overlay {
             if model.scripts.isEmpty {
                 ContentUnavailableView {

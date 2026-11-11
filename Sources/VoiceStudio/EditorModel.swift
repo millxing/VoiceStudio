@@ -14,6 +14,7 @@ extension AppModel {
     var timeline: Timeline { library.timeline }
     var editorTakes: [SpeechTake] { takes.filter { $0.status == .completed } }
     var clip: TimelineClip? { timeline.clips.first { $0.id == selectedClip } }
+    var clips: [TimelineClip] { timeline.clips.filter { selectedClips.contains($0.id) } }
     var isPlayingTimeline: Bool { timelineRender != nil && playback.url == timelineRender }
     /// The playhead, following playback while the timeline plays.
     var timelineTime: Double { max(0, isPlayingTimeline ? playback.position + timelinePlaybackOrigin : playhead) }
@@ -27,7 +28,7 @@ extension AppModel {
         guard old != new else { return }
         library.timeline = new
         timelineChanged()
-        if let selectedClip, !new.clips.contains(where: { $0.id == selectedClip }) { self.selectedClip = nil }
+        selectedClips.formIntersection(new.clips.map(\.id))
         undo?.registerUndo(withTarget: self) { model in model.setTimeline(old, action: action, undo: undo) }
         undo?.setActionName(action)
     }
@@ -69,14 +70,52 @@ extension AppModel {
 
     static let clipPasteboardType = "com.robschoen.voicestudio.timeline-clip"
 
+    /// Shift adds clips to the selection; Command toggles an individual clip.
+    func selectClip(_ id: UUID, modifiers: NSEvent.ModifierFlags = []) {
+        if modifiers.contains(.command) {
+            if selectedClips.contains(id) { selectedClips.remove(id) } else { selectedClips.insert(id) }
+        } else if modifiers.contains(.shift) {
+            selectedClips.insert(id)
+        } else { selectedClips = [id] }
+    }
+
+    func copyClips() -> Data? {
+        guard !clips.isEmpty else { return nil }
+        return try? JSONEncoder().encode(clips)
+    }
+
     func pasteClip(_ data: Data, undo: UndoManager?) {
-        guard var clip = try? JSONDecoder().decode(TimelineClip.self, from: data),
-              library.takes.contains(where: { $0.id == clip.takeID }),
-              timeline.tracks.indices.contains(clip.track), clip.inPoint >= 0,
-              clip.inPoint.isFinite, clip.outPoint.isFinite, clip.length >= Timeline.minimumLength else { return }
-        clip.id = UUID(); clip.start = timelineTime
-        editTimeline("Paste Clip", undo: undo) { $0.clips.append(clip) }
-        selectedClip = clip.id
+        let decoder = JSONDecoder()
+        // Also accept the single-clip clipboard used by older versions.
+        guard var pasted = (try? decoder.decode([TimelineClip].self, from: data))
+                ?? (try? decoder.decode(TimelineClip.self, from: data)).map({ [$0] }),
+              !pasted.isEmpty, pasted.allSatisfy({ clip in
+                  library.takes.contains { $0.id == clip.takeID } && timeline.tracks.indices.contains(clip.track)
+                      && clip.start.isFinite && clip.start >= 0 && clip.inPoint.isFinite && clip.inPoint >= 0
+                      && clip.outPoint.isFinite && clip.length >= Timeline.minimumLength
+              }), let origin = pasted.map(\.start).min() else { return }
+        let position = timelineTime
+        for index in pasted.indices {
+            pasted[index].id = UUID()
+            pasted[index].start = position + pasted[index].start - origin
+        }
+        editTimeline("Paste Clips", undo: undo) { $0.clips.append(contentsOf: pasted) }
+        selectedClips = Set(pasted.map(\.id))
+    }
+
+    /// Places all selected source clips sequentially, in their displayed list order.
+    func addTakesToTimeline(_ ids: Set<UUID>, track: Int, undo: UndoManager?) {
+        let sources = editorTakes.filter { ids.contains($0.id) }
+        var next = timeline
+        var added = Set<UUID>()
+        for source in sources {
+            let duration = sourceDuration(source.id)
+            guard duration > 0 else { continue }
+            added.insert(next.add(takeID: source.id, duration: duration, track: track).id)
+        }
+        guard !added.isEmpty else { return }
+        setTimeline(next, action: "Add Clips", undo: undo)
+        selectedClips = added
     }
 
     /// Imports a private copy so moving or deleting the original file cannot break the project.
@@ -127,16 +166,19 @@ extension AppModel {
     }
     func splitAtPlayhead(undo: UndoManager?) {
         let time = timelineTime
-        // With a clip selected, split only that clip; otherwise split everything under the playhead.
-        if let clip, clip.start < time, clip.end > time {
-            editTimeline("Split Clip", undo: undo) { $0.split(clip.id, at: time) }
-        } else {
+        let ids = selectedClips
+        if ids.isEmpty {
             editTimeline("Split Clips", undo: undo) { $0.splitAll(at: time) }
+        } else {
+            editTimeline("Split Clips", undo: undo) { timeline in
+                for id in ids { timeline.split(id, at: time) }
+            }
         }
     }
     func deleteClip(ripple: Bool, undo: UndoManager?) {
-        guard let id = selectedClip else { return }
-        editTimeline(ripple ? "Ripple Delete" : "Delete Clip", undo: undo) { ripple ? $0.rippleRemove([id]) : $0.remove([id]) }
+        let ids = selectedClips
+        guard !ids.isEmpty else { return }
+        editTimeline(ripple ? "Ripple Delete" : "Delete Clips", undo: undo) { ripple ? $0.rippleRemove(ids) : $0.remove(ids) }
     }
     func clearTimeline(undo: UndoManager?) {
         editTimeline("Clear Timeline", undo: undo) { $0.clips.removeAll(); $0.loop = nil }

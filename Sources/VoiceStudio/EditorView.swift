@@ -32,7 +32,7 @@ struct EditorBin: View {
     @Environment(\.undoManager) private var undo
     var body: some View {
         @Bindable var model = model
-        List(model.editorTakes, selection: $model.selectedTake) { take in
+        List(model.editorTakes, selection: $model.selectedTakes) { take in
             HStack(spacing: Space.sm) {
                 VStack(alignment: .leading, spacing: Space.xs) {
                     Text(take.displayTitle).lineLimit(1).help(take.displayTitle)
@@ -45,14 +45,19 @@ struct EditorBin: View {
             }
             .padding(.vertical, Space.xs).tag(take.id)
             .draggable(take.id.uuidString)
-            .contextMenu {
-                ForEach(0..<Timeline.trackCount, id: \.self) { track in
-                    Button("Add to Track \(track + 1)") { model.addToTimeline(take, track: track, undo: undo) }
-                }
-                Divider()
-                Button("Play/Pause") { model.play(take) }
-            }
         }
+        .contextMenu(forSelectionType: UUID.self) { ids in
+            ForEach(0..<Timeline.trackCount, id: \.self) { track in
+                Button("Add Selected Clips to Track \(track + 1)") { model.addTakesToTimeline(ids, track: track, undo: undo) }
+                    .disabled(ids.isEmpty)
+            }
+            Divider()
+            Button("Generate Selected Again") { model.retryTakes(ids) }.disabled(!model.editorTakes.contains { ids.contains($0.id) && $0.importedFilename == nil })
+            Button("Remove Selected Clips", role: .destructive) { model.removeTakes(ids, undo: undo) }
+                .disabled(ids.isEmpty)
+        }
+        .onDeleteCommand { model.removeTakes(model.selectedTakes, undo: undo) }
+
         .overlay {
             if model.editorTakes.isEmpty {
                 ContentUnavailableView("No Clips to Edit", systemImage: "waveform",
@@ -65,10 +70,10 @@ struct EditorBin: View {
         .toolbar {
             ToolbarItem {
                 Button("Add to Timeline", systemImage: "plus.rectangle.on.rectangle") {
-                    if let take = model.take { model.addToTimeline(take, track: 0, undo: undo) }
+                    model.addTakesToTimeline(model.selectedTakes, track: 0, undo: undo)
                 }
-                .disabled(model.take?.status != .completed)
-                .help("Add the selected clip to the end of track 1 (Shift-Command-A)")
+                .disabled(!model.editorTakes.contains { model.selectedTakes.contains($0.id) })
+                .help("Add the selected clips to the end of track 1 (Shift-Command-A)")
             }
         }
     }
@@ -82,6 +87,8 @@ struct EditorDetail: View {
     @State private var draft: Timeline?
     @State private var dragBase: Timeline?
     @State private var dragDuplicate: UUID?
+    @State private var dragSelection = Set<UUID>()
+    @State private var dragCopies: [UUID: UUID] = [:]
     @State private var focusRequest: UUID?
     @State private var scrollPosition = ScrollPosition(x: 0)
 
@@ -290,29 +297,40 @@ struct EditorDetail: View {
 
     private func clipView(_ clip: TimelineClip, pps: Double) -> some View {
         ClipView(clip: clip, take: model.takeFor(clip), peaks: model.waveforms[clip.takeID],
-                 selected: model.selectedClip == clip.id, pixelsPerSecond: pps,
+                 selected: model.selectedClips.contains(clip.id), pixelsPerSecond: pps,
                  muted: model.timeline.tracks[clip.track].muted)
             .overlay(alignment: .leading) { trimHandle(clip, leading: true, pps: pps) }
             .overlay(alignment: .trailing) { trimHandle(clip, leading: false, pps: pps) }
             .gesture(DragGesture(minimumDistance: 2, coordinateSpace: .named("timeline"))
                 .onChanged { value in
                     guard let (base, original) = begin(clip, duplicate: (NSApp.currentEvent?.modifierFlags ?? NSEvent.modifierFlags).contains(.option)) else { return }
+                    let originals = base.clips.filter { dragSelection.contains($0.id) }
                     let tracks = Int((value.translation.height / EditorMetrics.lane).rounded())
-                    let start = base.snap(start: original.start + value.translation.width / pps, length: original.length,
-                                          excluding: clip.id, extra: [model.timelineTime], tolerance: EditorMetrics.snap / pps)
+                    var snapBase = base
+                    snapBase.clips.removeAll { dragSelection.contains($0.id) }
+                    let start = snapBase.snap(start: original.start + value.translation.width / pps, length: original.length,
+                                              excluding: nil, extra: [model.timelineTime], tolerance: EditorMetrics.snap / pps)
+                    let delta = max(start - original.start, -(originals.map(\.start).min() ?? 0))
+                    let trackDelta = min(max(tracks, -(originals.map(\.track).min() ?? 0)),
+                                         Timeline.trackCount - 1 - (originals.map(\.track).max() ?? 0))
                     var next = base
-                    if let dragDuplicate {
-                        var duplicate = original; duplicate.id = dragDuplicate
-                        next.clips.append(duplicate)
+                    for source in originals {
+                        let id = dragCopies[source.id] ?? source.id
+                        if dragCopies[source.id] != nil {
+                            var copy = source; copy.id = id; next.clips.append(copy)
+                        }
+                        next.move(id, to: source.start + delta, track: source.track + trackDelta)
                     }
-                    next.move(dragDuplicate ?? clip.id, to: start, track: original.track + tracks)
                     draft = next
                 }
                 .onEnded { _ in commit(dragDuplicate == nil ? "Move Clip" : "Duplicate Clip") })
-            .onTapGesture { focusRequest = UUID(); model.selectedClip = clip.id }
+            .onTapGesture {
+                focusRequest = UUID()
+                model.selectClip(clip.id, modifiers: NSApp.currentEvent?.modifierFlags ?? NSEvent.modifierFlags)
+            }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(model.takeFor(clip)?.displayTitle ?? "Missing clip"), track \(clip.track + 1), starts \(preciseTimeLabel(clip.start))")
-            .accessibilityAddTraits(model.selectedClip == clip.id ? .isSelected : [])
+            .accessibilityAddTraits(model.selectedClips.contains(clip.id) ? .isSelected : [])
     }
 
     private func trimHandle(_ clip: TimelineClip, leading: Bool, pps: Double) -> some View {
@@ -338,34 +356,42 @@ struct EditorDetail: View {
     private func begin(_ clip: TimelineClip, duplicate: Bool = false) -> (Timeline, TimelineClip)? {
         if dragBase == nil {
             dragBase = model.timeline
-            dragDuplicate = duplicate ? UUID() : nil
-            model.selectedClip = dragDuplicate ?? clip.id; focusRequest = UUID()
+            if !model.selectedClips.contains(clip.id) { model.selectClip(clip.id) }
+            dragSelection = model.selectedClips
+            if duplicate {
+                dragCopies = Dictionary(uniqueKeysWithValues: dragSelection.map { ($0, UUID()) })
+                dragDuplicate = dragCopies[clip.id]
+                model.selectedClips = Set(dragCopies.values)
+            }
+            focusRequest = UUID()
         }
         guard let base = dragBase, let original = base.clips.first(where: { $0.id == clip.id }) else { return nil }
         return (base, original)
     }
     private func commit(_ action: String) {
         if let draft { model.setTimeline(draft, action: action, undo: undo) }
-        draft = nil; dragBase = nil; dragDuplicate = nil
+        draft = nil; dragBase = nil; dragDuplicate = nil; dragSelection = []; dragCopies = [:]
     }
 
     // MARK: Inspector
 
     @ViewBuilder private func inspector(_ shown: Timeline) -> some View {
-        if let clip = shown.clips.first(where: { $0.id == model.selectedClip }) {
+        if let clip = shown.clips.first(where: { model.selectedClips.contains($0.id) }) {
             VStack(alignment: .leading, spacing: Space.sm) {
-                Text(model.takeFor(clip)?.displayTitle ?? "Missing clip").font(.headline)
-                Text("Track \(clip.track + 1) · starts at \(preciseTimeLabel(clip.start)) · \(String(format: "%.2f", clip.length)) seconds · uses \(preciseTimeLabel(clip.inPoint))–\(preciseTimeLabel(clip.outPoint)) of the clip")
-                    .font(.callout).foregroundStyle(.secondary).monospacedDigit()
+                Text(model.selectedClips.count > 1 ? "\(model.selectedClips.count) clips selected" : (model.takeFor(clip)?.displayTitle ?? "Missing clip")).font(.headline)
+                if model.selectedClips.count == 1 {
+                    Text("Track \(clip.track + 1) · starts at \(preciseTimeLabel(clip.start)) · \(String(format: "%.2f", clip.length)) seconds · uses \(preciseTimeLabel(clip.inPoint))–\(preciseTimeLabel(clip.outPoint)) of the clip")
+                        .font(.callout).foregroundStyle(.secondary).monospacedDigit()
+                }
                 HStack(spacing: Space.sm) {
                     Button("Split at Playhead", systemImage: "scissors") { model.splitAtPlayhead(undo: undo) }
                     Button("Delete", systemImage: "trash") { model.deleteClip(ripple: false, undo: undo) }
                     Button("Ripple Delete") { model.deleteClip(ripple: true, undo: undo) }
-                        .help("Delete the clip and move later clips on its track left to close the gap (Shift-Delete)")
+                        .help("Delete selected clips and move later clips on their tracks left to close the gap (Shift-Delete)")
                 }
             }.gridProbe("editor-clip", area: "editor-inspector")
         } else {
-            Label("Drag clips onto a track. Drag a clip to move it, Option-drag to duplicate, or drag its edges to trim. Cut/copy/paste with Command-X/C/V. Delete removes the selection. Split at the playhead with Command-B. Space plays the timeline.",
+            Label("Drag clips onto a track. Shift-click to select multiple clips; Command-click to toggle. Drag to move the selection, Option-drag to duplicate, or drag its edges to trim. Cut/copy/paste with Command-X/C/V. Delete removes the selection. Split at the playhead with Command-B. Space plays the timeline.",
                   systemImage: "info.circle")
                 .font(.callout).foregroundStyle(.secondary)
                 .gridProbe("editor-hint", area: "editor-inspector")

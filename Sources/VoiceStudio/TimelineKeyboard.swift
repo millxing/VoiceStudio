@@ -45,11 +45,12 @@ final class TimelineKeyView: NSView, NSUserInterfaceValidations {
         case "c": copy(nil); return true
         case "x": cut(nil); return true
         case "v": paste(nil); return true
+        case "a": model?.selectedClips = Set(model?.timeline.clips.map(\.id) ?? []); return true
         default: return super.performKeyEquivalent(with: event)
         }
     }
     @objc func copy(_ sender: Any?) {
-        guard let clip = model?.clip, let data = try? JSONEncoder().encode(clip) else { return }
+        guard let data = model?.copyClips() else { return }
         pasteboard.clearContents()
         pasteboard.setData(data, forType: .init(AppModel.clipPasteboardType))
     }

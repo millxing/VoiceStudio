@@ -43,6 +43,11 @@ enum Snapshot {
                     if page == .scripts, model.selectedScripts.isEmpty, let script = model.scripts.first {
                         model.selectedScripts = [script.id]
                     }
+                    if env["APP_SNAPSHOT_MULTI"] == "1" {
+                        if page == .scripts { model.selectedScripts = Set(model.scripts.prefix(2).map(\.id)) }
+                        if page == .takes || page == .editor { model.selectedTakes = Set(model.editorTakes.prefix(2).map(\.id)) }
+                        if page == .editor { model.selectedClips = Set(model.timeline.clips.prefix(2).map(\.id)) }
+                    }
                     try? await Task.sleep(for: .seconds(0.4))
                     await capture(to: "\(dir)/\(page.rawValue)-\(mode).png")
                 }

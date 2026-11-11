@@ -44,7 +44,11 @@ final class AppModel {
     var sidebar: SidebarItem? = .scripts { didSet { saveSession() } }
     var selectedScripts = Set<UUID>() { didSet { saveSession() } }
     var selectedVoice: UUID? { didSet { saveSession() } }
-    var selectedTake: UUID? { didSet { saveSession() } }
+    var selectedTakes = Set<UUID>() { didSet { saveSession() } }
+    var selectedTake: UUID? {
+        get { takes.first { selectedTakes.contains($0.id) }?.id }
+        set { selectedTakes = Set(newValue.map { [$0] } ?? []) }
+    }
     var settingsTab: SettingsTab = .engine
     let installer = EngineInstaller()
     var showingEngineSetup = false
@@ -59,7 +63,11 @@ final class AppModel {
     let engine = SpeechEngine()
     let playback = AudioPlayback()
     // Editor state. The arrangement itself lives in `library.timeline`.
-    var selectedClip: UUID?
+    var selectedClips = Set<UUID>()
+    var selectedClip: UUID? {
+        get { timeline.clips.first { selectedClips.contains($0.id) }?.id }
+        set { selectedClips = Set(newValue.map { [$0] } ?? []) }
+    }
     var playhead = 0.0
     var zoom = 40.0
     var waveforms: [UUID: [Float]] = [:]
@@ -105,7 +113,7 @@ final class AppModel {
             sidebar = SidebarItem(rawValue: session["page"] ?? "") ?? .scripts
             selectedScripts = Set((session["scripts"] ?? "").split(separator: ",").compactMap { UUID(uuidString: String($0)) })
             selectedVoice = UUID(uuidString: session["voice"] ?? "")
-            selectedTake = UUID(uuidString: session["take"] ?? "")
+            selectedTakes = Set((session["takes"] ?? session["take"] ?? "").split(separator: ",").compactMap { UUID(uuidString: String($0)) })
         }
         saveEnabled = true
         engine.onEvent = { [weak self] event in self?.handle(event) }
@@ -118,7 +126,7 @@ final class AppModel {
     private func saveSession() {
         guard saveEnabled else { return }
         let session = ["page": sidebar?.rawValue ?? "scripts", "scripts": selectedScripts.map(\.uuidString).sorted().joined(separator: ","),
-                       "voice": selectedVoice?.uuidString ?? "", "take": selectedTake?.uuidString ?? ""]
+                       "voice": selectedVoice?.uuidString ?? "", "takes": selectedTakes.map(\.uuidString).sorted().joined(separator: ",")]
         do {
             try FileManager.default.createDirectory(at: Store.root, withIntermediateDirectories: true)
             try JSONEncoder().encode(session).write(to: Store.root.appending(path: "Session.json"), options: .atomic)
@@ -356,6 +364,10 @@ final class AppModel {
         }
         progress = "Queue stopped"
     }
+    func retryTakes(_ ids: Set<UUID>) {
+        let sources = takes.filter { ids.contains($0.id) }
+        for source in sources { retry(source) }
+    }
     func retry(_ take: SpeechTake) {
         guard take.importedFilename == nil, ![.queued, .running].contains(take.status), prepareTakeStorage() else { return }
         // A retry is a new take. Original audio/metadata remain immutable for the future editor.
@@ -369,10 +381,21 @@ final class AppModel {
         if queueRunning { batchTotal += 1 } else { resumeQueue() }
     }
     func removeTake(_ take: SpeechTake, undo: UndoManager?) {
-        guard ![.queued, .running].contains(take.status) else { return }
-        library.takes.removeAll { $0.id == take.id }; selectedTake = nil
-        undo?.registerUndo(withTarget: self) { model in model.library.takes.append(take) }
-        undo?.setActionName("Remove Clip")
+        removeTakes([take.id], undo: undo)
+    }
+    func removeTakes(_ ids: Set<UUID>, undo: UndoManager?) {
+        let removed = library.takes.enumerated().filter {
+            ids.contains($0.element.id) && ![.queued, .running].contains($0.element.status)
+        }
+        guard !removed.isEmpty else { return }
+        let removedIDs = Set(removed.map { $0.element.id })
+        library.takes.removeAll { removedIDs.contains($0.id) }
+        selectedTakes.subtract(removedIDs)
+        undo?.registerUndo(withTarget: self) { model in
+            for (index, take) in removed { model.library.takes.insert(take, at: min(index, model.library.takes.count)) }
+            model.selectedTakes = removedIDs
+        }
+        undo?.setActionName("Remove Clips")
     }
     func play(_ take: SpeechTake) {
         do { try playback.toggle(take.audioURL(relativeTo: Store.root)) }

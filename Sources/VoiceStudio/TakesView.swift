@@ -8,7 +8,7 @@ struct TakeList: View {
     var visible: [SpeechTake] { model.takes.filter { search.isEmpty || $0.title.localizedCaseInsensitiveContains(search) || $0.voiceName.localizedCaseInsensitiveContains(search) } }
     var body: some View {
         @Bindable var model = model
-        List(visible, selection: $model.selectedTake) { take in
+        List(visible, selection: $model.selectedTakes) { take in
             VStack(alignment: .leading, spacing: Space.xs) {
                 Text(take.displayTitle).lineLimit(1).help(take.displayTitle)
                 Text(take.voiceName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -18,18 +18,20 @@ struct TakeList: View {
                     if take.status == .completed { Text(timeLabel(take.duration)).monospacedDigit() }
                 }.font(.caption).foregroundStyle(.secondary)
             }.padding(.vertical, Space.xs).tag(take.id)
-                .contextMenu {
-                    if take.status == .completed {
-                        Button("Play/Pause") { model.play(take) }
-                        Button("Export Clip…") { model.export(take) }
-                        Button("Show in Finder") { model.reveal(take) }
-                    }
-                    if ![.queued, .running].contains(take.status) {
-                        if take.importedFilename == nil { Button("Generate Again") { model.retry(take) } }
-                        Button("Remove Clip", role: .destructive) { model.removeTake(take, undo: undo) }
-                    }
-                }
         }
+        .contextMenu(forSelectionType: UUID.self) { ids in
+            let selected = model.takes.filter { ids.contains($0.id) }
+            if selected.count == 1, let take = selected.first, take.status == .completed {
+                Button("Play/Pause") { model.play(take) }
+                Button("Export Clip…") { model.export(take) }
+                Button("Show in Finder") { model.reveal(take) }
+            }
+            Button("Generate Selected Again") { model.retryTakes(ids) }.disabled(!selected.contains { $0.importedFilename == nil && ![.queued, .running].contains($0.status) })
+            Button("Remove Selected Clips", role: .destructive) { model.removeTakes(ids, undo: undo) }
+                .disabled(!selected.contains { ![.queued, .running].contains($0.status) })
+        }
+        .onDeleteCommand { model.removeTakes(model.selectedTakes, undo: undo) }
+
         .overlay {
             if model.takes.isEmpty {
                 ContentUnavailableView("No Clips", systemImage: "waveform", description: Text("Generate speech from Scripts. Every clip will be saved here."))
@@ -48,6 +50,10 @@ struct TakeDetail: View {
                 VStack(alignment: .leading, spacing: Space.xl) {
                     VStack(alignment: .leading, spacing: Space.sm) {
                         Text(take.displayTitle).font(.title2).textSelection(.enabled)
+                        if model.selectedTakes.count > 1 {
+                            Text("\(model.selectedTakes.count) clips selected · previewing \(take.displayTitle)")
+                                .font(.callout).foregroundStyle(.secondary)
+                        }
                         Label(take.status.title, systemImage: take.status.symbol).foregroundStyle(.secondary)
                     }.gridProbe("take-title", area: "take-page")
                     if take.status == .completed {
@@ -55,13 +61,13 @@ struct TakeDetail: View {
                         HStack(spacing: Space.sm) {
                             Button("Export Clip…", systemImage: "square.and.arrow.up") { model.export(take) }
                             Button("Show in Finder", systemImage: "folder") { model.reveal(take) }
-                            if take.importedFilename == nil { Button("Generate Again") { model.retry(take) } }
+                            if take.importedFilename == nil { Button(model.selectedTakes.count > 1 ? "Generate Selected Again" : "Generate Again") { model.retryTakes(model.selectedTakes) } }
                         }.gridProbe("take-actions", area: "take-page")
                     } else if take.status == .failed || take.status == .canceled {
                         VStack(alignment: .leading, spacing: Space.sm) {
                             Text(take.error.isEmpty ? "Generation was canceled. Your script and settings are retained." : take.error)
                                 .foregroundStyle(.secondary).textSelection(.enabled)
-                            Button("Retry as New Clip") { model.retry(take) }
+                            Button(model.selectedTakes.count > 1 ? "Retry Selected as New Clips" : "Retry as New Clip") { model.retryTakes(model.selectedTakes) }
                         }.gridProbe("take-error", area: "take-page")
                     } else {
                         HStack(spacing: Space.sm) {
