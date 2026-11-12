@@ -12,7 +12,7 @@ struct SettingsView: View {
             Form { StorageSettings() }
                 .formStyle(.grouped).fitsContent().frame(width: 640)
                 .tabItem { Label("Storage", systemImage: "folder") }.tag(SettingsTab.storage)
-            Form { AppearanceSettings() }
+            Form { AppearanceSettings(); ScriptEditorSettings() }
                 .formStyle(.grouped).fitsContent().frame(width: 520)
                 .tabItem { Label("Appearance", systemImage: "paintpalette") }.tag(SettingsTab.appearance)
         }.noInitialFocus()
@@ -120,5 +120,26 @@ struct StorageSettings: View {
         guard panel.runModal() == .OK, let folder = panel.url else { return }
         do { try model.setTakesFolder(folder); error = "" }
         catch { self.error = error.localizedDescription }
+    }
+}
+struct ScriptEditorSettings: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        @Bindable var model = model
+        Section("Script Editor") {
+            LabeledContent("Font size") {
+                HStack(spacing: Space.sm) {
+                    TextField("Font size", value: $model.preferences.scriptFont, format: .number.precision(.fractionLength(0)))
+                        .labelsHidden().multilineTextAlignment(.trailing).frame(width: 48)
+                    Stepper("Font size", value: $model.preferences.scriptFont, in: StudioPreferences.scriptFontSizes, step: 1).labelsHidden()
+                    Text("pt").foregroundStyle(.secondary)
+                    Button("Use Default") { model.preferences.scriptFontSize = nil }
+                        .disabled(model.preferences.scriptFontSize == nil)
+                }
+            }
+            Text("The quick brown fox jumps over the lazy dog.")
+                .font(.system(size: model.preferences.scriptFont)).lineLimit(1).truncationMode(.tail)
+                .accessibilityLabel("Font size preview")
+        }
     }
 }

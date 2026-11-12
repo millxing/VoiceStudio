@@ -16,7 +16,7 @@ static func expectThrows<T>(_ operation: @autoclosure () throws -> T) throws {
     throw LibraryFile.failure("Check \(checks) expected an error")
 }
 static func main() throws {
-    try testImports(); try testSnapshotsAndRecovery(); try testCorruptLibrary(); try testCachedVoiceCompatibility(); try testTimeline()
+    try testImports(); try testSnapshotsAndRecovery(); try testCorruptLibrary(); try testCachedVoiceCompatibility(); try testTimeline(); try testScriptNamesAndDates()
     print("PASS \(checks) library checks")
 }
 static func testImports() throws {
@@ -142,6 +142,25 @@ static func testTimeline() throws {
     try expect(try JSONDecoder().decode(StudioLibrary.self, from: JSONEncoder().encode(lib)).timeline == t)
     json.removeValue(forKey: "timeline")
     try expect(try JSONDecoder().decode(StudioLibrary.self, from: JSONSerialization.data(withJSONObject: json)).timeline.isEmpty)
+}
+
+static func testScriptNamesAndDates() throws {
+    var parts = DateComponents(); parts.year = 2026; parts.month = 11; parts.day = 2; parts.hour = 23
+    let date = Calendar(identifier: .gregorian).date(from: parts)!
+    try expect(ScriptDocument.defaultTitle(at: date, number: 4524) == "20261102_4524")
+    try expect(ScriptDocument.defaultTitle(at: date, number: 7) == "20261102_0007")
+    let random = ScriptDocument.defaultTitle()
+    try expect(random.count == 13 && random.dropFirst(8).first == "_" && Int(random.suffix(4)).map { (1000...9999).contains($0) } == true)
+    let script = ScriptDocument(title: "Chapter", text: "Words.", createdAt: date)
+    try expect(script.modifiedAt == script.createdAt)
+    let copy = script.duplicate()
+    try expect(copy.id != script.id && copy.title == "Chapter copy" && copy.text == "Words." && copy.createdAt > date && copy.modifiedAt == copy.createdAt)
+    // Scripts saved before the edited time existed load with their creation time.
+    var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(script)) as! [String: Any]
+    json.removeValue(forKey: "modifiedAt")
+    let old = try JSONDecoder().decode(ScriptDocument.self, from: JSONSerialization.data(withJSONObject: json))
+    try expect(old.modifiedAt == old.createdAt && old.id == script.id)
+    try expect(try JSONDecoder().decode(ScriptDocument.self, from: JSONEncoder().encode(script)) == script)
 }
 
 }

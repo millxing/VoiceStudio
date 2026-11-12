@@ -36,6 +36,14 @@ struct StudioPreferences: Codable, Equatable {
     var autoplay = false
     var takesFolder: String?
     var exportFolder: String?
+    /// Script editor text size in points. Optional, so settings saved before it existed still load.
+    var scriptFontSize: Double?
+    static let defaultScriptFontSize = 26.0
+    static let scriptFontSizes = 10.0...72.0
+    var scriptFont: Double {
+        get { scriptFontSize ?? Self.defaultScriptFontSize }
+        set { scriptFontSize = min(max(newValue, Self.scriptFontSizes.lowerBound), Self.scriptFontSizes.upperBound) }
+    }
 }
 @Observable
 final class AppModel {
@@ -140,14 +148,49 @@ final class AppModel {
         } catch { message = "Unable to save settings: \(error.localizedDescription)" }
     }
     func addScript() {
-        let script = ScriptDocument()
+        let script = ScriptDocument(title: ScriptDocument.defaultTitle())
         library.scripts.append(script)
         sidebar = .scripts; selectedScripts = [script.id]
     }
     func updateScript(_ id: UUID, title: String? = nil, text: String? = nil) {
         guard let i = library.scripts.firstIndex(where: { $0.id == id }) else { return }
-        if let title { library.scripts[i].title = title }
-        if let text { library.scripts[i].text = text }
+        var script = library.scripts[i]
+        if let title { script.title = title }
+        if let text { script.text = text }
+        guard script != library.scripts[i] else { return }
+        script.modifiedAt = Date()
+        library.scripts[i] = script
+    }
+    /// Copies the scripts and inserts the copies at `index`, or after the last original.
+    /// The copies become the selection.
+    func duplicateScripts(_ ids: Set<UUID>, at index: Int? = nil, undo: UndoManager?) {
+        let originals = library.scripts.filter { ids.contains($0.id) }
+        guard !originals.isEmpty else { return }
+        let copies = originals.map { $0.duplicate() }
+        let last = library.scripts.lastIndex { ids.contains($0.id) } ?? library.scripts.count - 1
+        let at = min(max(0, index ?? last + 1), library.scripts.count)
+        library.scripts.insert(contentsOf: copies, at: at)
+        sidebar = .scripts; selectedScripts = Set(copies.map(\.id))
+        let copyIDs = Set(copies.map(\.id))
+        undo?.registerUndo(withTarget: self) { model in
+            model.library.scripts.removeAll { copyIDs.contains($0.id) }
+            model.selectedScripts = ids
+        }
+        undo?.setActionName(copies.count == 1 ? "Duplicate Script" : "Duplicate Scripts")
+    }
+    /// A drag in the script list. Option duplicates the dragged scripts; a plain drag reorders them.
+    func dropScripts(_ offsets: IndexSet, to destination: Int, copy: Bool, undo: UndoManager?) {
+        let ids = Set(offsets.compactMap { library.scripts.indices.contains($0) ? library.scripts[$0].id : nil })
+        if copy { duplicateScripts(ids, at: destination, undo: undo); return }
+        let order = library.scripts.map(\.id)
+        library.scripts.move(fromOffsets: offsets, toOffset: destination)
+        guard library.scripts.map(\.id) != order else { return }
+        // Undo restores the order only, so later text edits stay.
+        undo?.registerUndo(withTarget: self) { model in
+            let rank = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($1, $0) })
+            model.library.scripts.sort { (rank[$0.id] ?? .max) < (rank[$1.id] ?? .max) }
+        }
+        undo?.setActionName("Move Scripts")
     }
     func importScripts() {
         let panel = NSOpenPanel()

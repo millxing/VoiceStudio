@@ -5,6 +5,7 @@ import SwiftUI
 final class StudioMenuState: ObservableObject {
     @Published var canGenerate = false
     @Published var hasScripts = false
+    @Published var hasSelectedScripts = false
     @Published var canStop = false
     @Published var canPlay = false
     @Published var hasTake = false
@@ -19,6 +20,7 @@ final class StudioMenuState: ObservableObject {
         hasTimeline = !model.timeline.isEmpty
         canAddTake = model.editorTakes.contains { model.selectedTakes.contains($0.id) }
         canGenerate = model.canGenerate
+        hasSelectedScripts = model.sidebar == .scripts && !model.selectedScripts.isEmpty
         hasScripts = model.scripts.contains { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         canStop = model.queueRunning
         canPlay = model.take?.status == .completed
@@ -56,6 +58,12 @@ struct VoiceStudioApp: App {
                 Button("Import Audio Clips…") { model.sidebar = .editor; model.importAudio(undo: NSApp.keyWindow?.undoManager) }
                 Button("Import Text Files…") { model.importScripts() }.keyboardShortcut("o")
                 Button("Add Voice…") { model.addVoice() }.keyboardShortcut("v", modifiers: [.command, .shift])
+            }
+            CommandGroup(after: .pasteboard) {
+                Divider()
+                // ⌘D duplicates scripts. In a text field it does nothing else, so the shortcut is safe there.
+                Button("Duplicate Selected Scripts") { model.duplicateScripts(model.selectedScripts, undo: NSApp.keyWindow?.undoManager) }
+                    .keyboardShortcut("d").disabled(!menu.hasSelectedScripts)
             }
             CommandMenu("Speech") {
                 Button("Install Speech Engine…") { model.showingEngineSetup = true }.keyboardShortcut("i", modifiers: [.command, .option])

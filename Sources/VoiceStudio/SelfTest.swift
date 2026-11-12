@@ -95,6 +95,7 @@ enum SelfTest {
                 check("Removing selected scripts deletes every selected document", selected.isDisjoint(with: Set(model.scripts.map(\.id))))
                 undo.undo()
                 check("Removing scripts can be undone", selected.isSubset(of: Set(model.scripts.map(\.id))))
+                try await scriptChecks(model)
                 if let sample = Bundle.main.resourceURL?.appending(path: "demo-reference.wav"), FileManager.default.fileExists(atPath: sample.path) {
                     try model.storeVoice(name: "Test narrator", urls: [sample, sample], existing: nil)
                     check("Voice copies multiple references", model.voices.last?.files.count == 2)
@@ -175,6 +176,44 @@ enum SelfTest {
             print("SELFTEST \(failures == 0 ? "PASS" : "FAIL") \(count) checks")
             finish(code: failures == 0 ? 0 : 1)
         }
+    }
+    /// New script names, edited times, duplicate, and drag to reorder.
+    static func scriptChecks(_ model: AppModel) async throws {
+        let selection = model.selectedScripts
+        defer { model.selectedScripts = selection }
+        model.addScript()
+        let script = model.selectedScript!
+        let today = ScriptDocument.defaultTitle(number: 0).prefix(8)
+        check("New scripts are named with the date and four digits", script.title.hasPrefix(today + "_") && script.title.count == 13 && Int(script.title.suffix(4)) != nil)
+        try await Task.sleep(for: .milliseconds(20))
+        model.updateScript(script.id, text: script.text)
+        check("An unchanged script keeps its time", model.selectedScript?.modifiedAt == script.createdAt)
+        model.updateScript(script.id, text: "Edited words.")
+        check("Editing a script updates its edited time", model.selectedScript.map { $0.modifiedAt > $0.createdAt } == true)
+        let undo = UndoManager()
+        let count = model.scripts.count
+        model.duplicateScripts([script.id], undo: undo)
+        let copy = model.selectedScript!
+        let index = model.scripts.firstIndex { $0.id == script.id }!
+        check("Duplicate inserts a copy after the original and selects it",
+              model.scripts.count == count + 1 && model.scripts[index + 1].id == copy.id && copy.text == "Edited words." && copy.title == "\(script.title) copy")
+        undo.undo()
+        check("Duplicate can be undone", model.scripts.count == count && model.selectedScripts == [script.id])
+        model.dropScripts(IndexSet(integer: index), to: 0, copy: true, undo: undo)
+        check("Option-drag duplicates to the drop position", model.scripts.count == count + 1 && model.scripts[0].text == "Edited words." && model.scripts[index + 1].id == script.id)
+        undo.undo()
+        let order = model.scripts.map(\.id)
+        model.dropScripts(IndexSet(integer: index), to: 0, copy: false, undo: undo)
+        check("A plain drag reorders scripts", model.scripts.count == count && model.scripts[0].id == script.id)
+        undo.undo()
+        check("Reordering can be undone", model.scripts.map(\.id) == order)
+        model.removeScripts([script.id], undo: nil)
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(StudioPreferences())) as! [String: Any]
+        json.removeValue(forKey: "scriptFontSize")
+        let older = try JSONDecoder().decode(StudioPreferences.self, from: JSONSerialization.data(withJSONObject: json))
+        check("Settings saved before the font size existed load with 26 pt", older.scriptFont == 26)
+        var prefs = StudioPreferences(); prefs.scriptFont = 200
+        check("Script font size stays in range", prefs.scriptFont == StudioPreferences.scriptFontSizes.upperBound)
     }
     /// Arranges two takes on two tracks, splices them, and exports the mix.
     static func editorChecks(_ model: AppModel) async throws {

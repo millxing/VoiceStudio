@@ -4,8 +4,31 @@ public struct ScriptDocument: Identifiable, Codable, Hashable, Sendable {
     public var id = UUID()
     public var title: String
     public var text: String
-    public var createdAt = Date()
-    public init(title: String = "Untitled Script", text: String = "") { self.title = title; self.text = text }
+    public var createdAt: Date
+    /// When the title or text last changed. Scripts saved before this field existed use `createdAt`.
+    public var modifiedAt: Date
+    public init(title: String = "Untitled Script", text: String = "", createdAt: Date = Date()) {
+        self.title = title; self.text = text; self.createdAt = createdAt; self.modifiedAt = createdAt
+    }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        text = try c.decode(String.self, forKey: .text)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        modifiedAt = try c.decodeIfPresent(Date.self, forKey: .modifiedAt) ?? createdAt
+    }
+    /// The name of a new script: the date and a random four-digit number, like 20261112_4524.
+    public static func defaultTitle(at date: Date = Date(), number: Int = Int.random(in: 1000...9999)) -> String {
+        let format = DateFormatter()
+        format.locale = Locale(identifier: "en_US_POSIX"); format.calendar = Calendar(identifier: .gregorian)
+        format.dateFormat = "yyyyMMdd"
+        return "\(format.string(from: date))_\(String(format: "%04d", number))"
+    }
+    /// A new script with the same title and text, created now.
+    public func duplicate(at date: Date = Date()) -> ScriptDocument {
+        ScriptDocument(title: title.isEmpty ? "" : "\(title) copy", text: text, createdAt: date)
+    }
 }
 public struct VoiceReference: Identifiable, Codable, Hashable, Sendable {
     public var id = UUID()

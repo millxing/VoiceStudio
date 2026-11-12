@@ -78,15 +78,31 @@ struct ScriptList: View {
         List(selection: $model.selectedScripts) {
             ForEach(model.scripts) { script in
                 VStack(alignment: .leading, spacing: Space.xs) {
-                    Text(script.title.isEmpty ? "Untitled Script" : script.title).lineLimit(1).help(script.title)
+                    HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
+                        Text(script.title.isEmpty ? "Untitled Script" : script.title).lineLimit(1).help(script.title)
+                        Spacer(minLength: Space.sm)
+                        Text(script.modifiedAt, format: .dateTime.month(.abbreviated).day().hour().minute())
+                            .font(.caption).monospacedDigit().foregroundStyle(.secondary).lineLimit(1).layoutPriority(1)
+                            .help(script.modifiedAt == script.createdAt
+                                  ? "Created \(script.createdAt.formatted(date: .complete, time: .shortened))"
+                                  : "Edited \(script.modifiedAt.formatted(date: .complete, time: .shortened))")
+                    }
                     Text(script.text.isEmpty ? "No text yet" : script.text.replacingOccurrences(of: "\n", with: " "))
                         .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 }.padding(.vertical, Space.xs).tag(script.id)
             }
+            // Drag to reorder. Hold Option while you drop to duplicate instead.
+            .onMove { offsets, destination in
+                model.dropScripts(offsets, to: destination, copy: NSEvent.modifierFlags.contains(.option), undo: undo)
+            }
         }
+        // Same as the takes list: a row inserted while the list shows can get a one-line height.
+        .id(model.scripts.map(\.id))
         .contextMenu(forSelectionType: UUID.self) { ids in
             Button("Generate Selected Scripts") { model.selectedScripts = ids; model.queue() }
                 .disabled(!model.scripts.contains { ids.contains($0.id) && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+            Button("Duplicate Selected Scripts") { model.duplicateScripts(ids, undo: undo) }
+                .disabled(ids.isEmpty)
             Button("Remove Selected Scripts", role: .destructive) { model.removeScripts(ids, undo: undo) }
                 .disabled(ids.isEmpty)
         }
@@ -123,7 +139,7 @@ struct ScriptDetail: View {
                 }.gridProbe("script-title", area: "script-page")
                 TextEditor(text: Binding(get: { model.scripts.first { $0.id == script.id }?.text ?? "" },
                     set: { model.updateScript(script.id, text: $0) }))
-                    .font(.body).scrollContentBackground(.hidden)
+                    .font(.system(size: model.preferences.scriptFont)).scrollContentBackground(.hidden)
                     .padding(Space.sm)
                     .background(.background, in: RoundedRectangle(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.separator))
