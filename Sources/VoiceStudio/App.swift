@@ -128,7 +128,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
         // Self-tests run as a background app: no Dock icon, no menu bar, and macOS does not
         // bring it forward at launch, so the person at the Mac keeps their focus.
-        guard SelfTest.requested else { return }
+        guard SelfTest.requested || Snapshot.requested else { return }
         NSApp.setActivationPolicy(.accessory)
         // SwiftUI still activates the app when it presents the window. Hand focus straight back
         // to whatever the person was using, every time.
@@ -142,7 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     func applicationDidFinishLaunching(_ notification: Notification) {
-        guard !SelfTest.requested else { return }
+        guard !SelfTest.requested && !Snapshot.requested else { return }
         NSApp.setActivationPolicy(.regular); NSApp.activate()
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

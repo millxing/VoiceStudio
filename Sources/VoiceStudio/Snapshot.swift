@@ -11,6 +11,11 @@ import VoiceStudioKit
 /// APP_SNAPSHOT_PAGES=all,starred limits the pages. Add "settings" to include Settings.
 /// Add APP_ACCENT=<id> to see the pages in another accent.
 enum Snapshot {
+    /// Snapshot runs stay in the background like the self-test, so the person keeps their focus.
+    static var requested: Bool {
+        let env = ProcessInfo.processInfo.environment
+        return !(env["APP_SNAPSHOT"] ?? "").isEmpty && env["APP_STORE"] != nil
+    }
     static func runIfRequested(model: AppModel, openSettings: OpenSettingsAction) {
         let env = ProcessInfo.processInfo.environment
         guard let dir = env["APP_SNAPSHOT"], !dir.isEmpty else { return }
@@ -148,22 +153,8 @@ enum Snapshot {
             print("SNAPSHOT no window")
             return
         }
-        // Active, like a window someone is using: real accent colors and focus rings.
-        // Activation is asynchronous. Wait for the actual key-window state
-        // before capturing, so the first image cannot be an inactive window.
-        for _ in 0..<10 {
-            // Snapshot-only activation: cooperative activate() can be refused
-            // while the terminal/agent remains frontmost. This API is still
-            // supported by the macOS 26 SDK and is confined to /tmp test runs.
-            NSApp.activate(ignoringOtherApps: true)
-            window.makeKeyAndOrderFront(nil)
-            try? await Task.sleep(for: .milliseconds(200))
-            if NSApp.isActive && window.isKeyWindow { break }
-        }
-        guard NSApp.isActive && window.isKeyWindow else {
-            print("SNAPSHOT refused inactive window \(path)")
-            return
-        }
+        // Never activate or raise the window: screencapture -l reads the window's own
+        // image even when other windows cover it. Windows show their inactive look.
         let size = window.contentView?.bounds.size ?? .zero
         GridProbes.shared.write(to: path.replacingOccurrences(of: ".png", with: "-layout.json"), window: size)
         try? FileManager.default.removeItem(atPath: path)
