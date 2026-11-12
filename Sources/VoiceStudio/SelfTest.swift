@@ -96,6 +96,7 @@ enum SelfTest {
                 undo.undo()
                 check("Removing scripts can be undone", selected.isSubset(of: Set(model.scripts.map(\.id))))
                 try await scriptChecks(model)
+                check("Tooltips appear after half a second", UserDefaults.standard.integer(forKey: "NSInitialToolTipDelay") == AppDelegate.toolTipDelay)
                 if let sample = Bundle.main.resourceURL?.appending(path: "demo-reference.wav"), FileManager.default.fileExists(atPath: sample.path) {
                     try model.storeVoice(name: "Test narrator", urls: [sample, sample], existing: nil)
                     check("Voice copies multiple references", model.voices.last?.files.count == 2)

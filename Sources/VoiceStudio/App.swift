@@ -125,7 +125,11 @@ struct VoiceStudioApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var model: AppModel?
     private var quittingAfterInstallation = false
+    /// Tooltip delay for this app only, in milliseconds. The macOS default felt like 2–3 seconds.
+    /// `defaults write com.robschoen.voicestudio NSInitialToolTipDelay -int <ms>` overrides it.
+    static let toolTipDelay = 500
     func applicationWillFinishLaunching(_ notification: Notification) {
+        UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": Self.toolTipDelay])
         // Self-tests run as a background app: no Dock icon, no menu bar, and macOS does not
         // bring it forward at launch, so the person at the Mac keeps their focus.
         guard SelfTest.requested || Snapshot.requested else { return }
