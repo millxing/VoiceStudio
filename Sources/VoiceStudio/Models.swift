@@ -90,6 +90,10 @@ final class AppModel {
     var scripts: [ScriptDocument] { library.scripts }
     var voices: [VoiceReference] { library.voices }
     var takes: [SpeechTake] { library.takes.sorted { $0.createdAt > $1.createdAt } }
+    /// Clips waiting for the engine, in the order it takes them: the running clip first.
+    var queueItems: [SpeechTake] {
+        library.takes.filter { $0.status == .running } + library.takes.filter { $0.status == .queued }
+    }
     var queuedCount: Int { library.takes.filter { $0.status == .queued }.count }
     var selectedScript: ScriptDocument? { scripts.first { selectedScripts.contains($0.id) } }
     var take: SpeechTake? { takes.first { $0.id == selectedTake } }

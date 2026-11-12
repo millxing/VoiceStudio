@@ -20,14 +20,7 @@ struct ContentView: View {
                         SettingsLink { Image(systemName: "gearshape") }
                             .buttonStyle(.plain).help("Settings (Command-,)").accessibilityLabel("Settings")
                     }
-                    if model.queueRunning {
-                        ProgressView(value: Double(model.completedInBatch), total: Double(max(1, model.batchTotal)))
-                        Text("\(model.completedInBatch) of \(model.batchTotal) clips finished").font(.caption).foregroundStyle(.secondary)
-                        Text(model.progress).font(.caption).foregroundStyle(.secondary).lineLimit(2).help(model.progress)
-                        Button("Stop Queue", systemImage: "stop.fill") { model.stopQueue() }
-                    } else if model.queuedCount > 0 {
-                        Button("Resume \(model.queuedCount) Queued Clips") { model.resumeQueue() }
-                    }
+                    SidebarQueue()
                 }
                 .padding(Space.lg)
             }
@@ -67,6 +60,55 @@ struct ContentView: View {
             SelfTest.runIfRequested(model: model)
             Snapshot.runIfRequested(model: model, openSettings: openSettings)
             if !Store.isOverridden && !SelfTest.requested { model.startOrSetUpEngine() }
+        }
+    }
+}
+/// The generation queue at the bottom of the sidebar: progress, then every waiting clip.
+/// The list scrolls when it is taller than the space it has.
+struct SidebarQueue: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        let items = model.queueItems
+        if model.queueRunning || !items.isEmpty {
+            VStack(alignment: .leading, spacing: Space.sm) {
+                Divider()
+                HStack {
+                    Text("Queue").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(items.count) \(items.count == 1 ? "clip" : "clips")").font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                }
+                if model.queueRunning {
+                    ProgressView(value: Double(model.completedInBatch), total: Double(max(1, model.batchTotal)))
+                    Text("\(model.completedInBatch) of \(model.batchTotal) clips finished").font(.caption).foregroundStyle(.secondary)
+                    Text(model.progress).font(.caption).foregroundStyle(.secondary).lineLimit(2).help(model.progress)
+                }
+                if !items.isEmpty {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: Space.xs) {
+                            ForEach(items) { take in
+                                Button { model.sidebar = .takes; model.selectedTake = take.id } label: {
+                                    Label {
+                                        Text(take.displayTitle).lineLimit(1).truncationMode(.middle)
+                                    } icon: {
+                                        Image(systemName: take.status.symbol)
+                                            .foregroundStyle(take.status == .running ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                                    }
+                                    .font(.caption).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .help("\(take.status == .running ? "Generating" : "Waiting"): \(take.displayTitle) · \(take.voiceName). Click to show the clip.")
+                            }
+                        }
+                    }
+                    .fitsContent(max: Space.section * 6)
+                    .accessibilityLabel("Queued clips")
+                }
+                if model.queueRunning {
+                    Button("Stop Queue", systemImage: "stop.fill") { model.stopQueue() }
+                } else if model.queuedCount > 0 {
+                    Button("Resume \(model.queuedCount) Queued Clips") { model.resumeQueue() }
+                }
+            }
         }
     }
 }

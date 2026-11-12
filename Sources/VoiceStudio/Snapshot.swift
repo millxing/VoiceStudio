@@ -1,6 +1,7 @@
 import AppKit
 import IOKit.pwr_mgt
 import SwiftUI
+import VoiceStudioKit
 
 /// Screenshot mode for agents.
 ///   APP_STORE=/tmp/test.store APP_SNAPSHOT=/tmp/shots /Applications/VoiceStudio.app/Contents/MacOS/VoiceStudio
@@ -61,8 +62,28 @@ enum Snapshot {
                         model.retryTakes([first.id])
                         try? await Task.sleep(for: .seconds(1.0))
                         await capture(to: "\(dir)/takes-again-\(mode).png")
-                        model.removeTakes(Set(model.library.takes.filter { $0.createdAt > first.createdAt && ![.queued, .running].contains($0.status) }.map(\.id)), undo: nil)
+                        let created: Set<UUID> = Set(model.library.takes.filter { $0.createdAt > first.createdAt }.map(\.id))
+                        model.stopQueue()
+                        model.removeTakes(created, undo: nil)
                     }
+                }
+                if only == nil || only?.contains("queue") == true, let script = model.scripts.first {
+                    // A long queue, with one clip running: the sidebar list must scroll.
+                    model.sidebar = .scripts
+                    var added = Set<UUID>()
+                    for n in 1...14 {
+                        var take = SpeechTake(script: script, voiceName: "Craig Gutsy", speaker: "Craig Gutsy", references: [], language: "en",
+                                              speed: 1, seed: n, modelFolder: "", device: "mps", number: 100 + n)
+                        if n == 1 { take.status = .running }
+                        model.library.takes.append(take); added.insert(take.id)
+                    }
+                    model.queueRunning = true; model.batchTotal = 16; model.completedInBatch = 2
+                    model.progress = "Generating \(script.title) · Clip 101…"
+                    try? await Task.sleep(for: .seconds(0.5))
+                    await capture(to: "\(dir)/queue-\(mode).png")
+                    model.queueRunning = false; model.progress = ""
+                    model.library.takes.removeAll { added.contains($0.id) }
+                    try? await Task.sleep(for: .seconds(0.3))
                 }
                 if (only == nil || only?.contains("cached-voice") == true), let cached = model.voices.first(where: { $0.cachedFile != nil }) {
                     model.sidebar = .voices; model.selectedVoice = cached.id
