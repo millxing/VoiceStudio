@@ -18,17 +18,37 @@ extension AppModel {
         panel.directoryURL = exportFolder
         if panel.runModal() == .OK, let url = panel.url { preferences.exportFolder = url.path }
     }
-    func saveTimeline() {
+    /// Asks before it clears the timeline, and offers to save it first.
+    func confirmClearTimeline(undo: UndoManager?) {
+        guard !timeline.isEmpty else { return }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Clear the timeline?"
+        alert.informativeText = "This removes every clip and the loop markers from the timeline. The clips stay in your library. Save the timeline first if you want to open this arrangement again."
+        alert.addButton(withTitle: "Save Timeline…")
+        let clear = alert.addButton(withTitle: "Clear Timeline")
+        clear.hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel").keyEquivalent = "\u{1b}"
+        switch alert.runModal() {
+        case .alertFirstButtonReturn: if saveTimeline() { clearTimeline(undo: undo) }
+        case .alertSecondButtonReturn: clearTimeline(undo: undo)
+        default: break
+        }
+    }
+    /// Returns true when the timeline was saved.
+    @discardableResult
+    func saveTimeline() -> Bool {
         let panel = NSSavePanel()
         panel.title = "Save Timeline"; panel.allowedContentTypes = [.voiceTimeline]
         panel.nameFieldStringValue = "Timeline.vstimeline"
         try? FileManager.default.createDirectory(at: exportFolder, withIntermediateDirectories: true)
         panel.directoryURL = exportFolder
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard panel.runModal() == .OK, let url = panel.url else { return false }
         do {
             try saveTimeline(to: url)
             preferences.exportFolder = url.deletingLastPathComponent().path
-        } catch { message = "Unable to save the timeline: \(error.localizedDescription)" }
+            return true
+        } catch { message = "Unable to save the timeline: \(error.localizedDescription)"; return false }
     }
     func saveTimeline(to url: URL) throws {
         let sources = try Set(timeline.clips.map(\.takeID)).sorted { $0.uuidString < $1.uuidString }.map { id in

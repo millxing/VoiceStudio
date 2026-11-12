@@ -115,8 +115,8 @@ struct VoiceStudioApp: App {
                 Button("Export Timeline as MP3…") { model.exportTimeline(.mp3) }
                     .keyboardShortcut("e", modifiers: [.command, .option, .shift]).disabled(!menu.hasTimeline)
                 Divider()
-                Button("Clear Timeline") { model.clearTimeline(undo: NSApp.keyWindow?.undoManager) }
-                    .disabled(!menu.hasTimeline)
+                Button("Clear Timeline…") { model.confirmClearTimeline(undo: NSApp.keyWindow?.undoManager) }
+                    .keyboardShortcut(.delete, modifiers: [.command, .option]).disabled(!menu.inEditor || !menu.hasTimeline)
             }
         }
         Settings { SettingsView().environment(model).themed() }.windowResizability(.contentSize)

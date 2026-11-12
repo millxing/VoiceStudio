@@ -436,7 +436,10 @@ struct EditorTransport: View {
                     .disabled(empty)
                 Button("Set Loop End at Playhead") { model.setLoopMarker(start: false, time: model.timelineTime, undo: undo) }
                     .disabled(empty)
-            }.fixedSize().help("Save or load an editable timeline, or position loop markers")
+                Divider()
+                Button("Clear Timeline…", role: .destructive) { model.confirmClearTimeline(undo: undo) }
+                    .disabled(empty)
+            }.fixedSize().help("Save, load, or clear the timeline, or position loop markers")
             Menu("Export", systemImage: "square.and.arrow.up") {
                 Button("Export as WAV…") { model.exportTimeline(.wav) }
                 Button("Export as MP3…") { model.exportTimeline(.mp3) }
