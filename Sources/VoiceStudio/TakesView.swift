@@ -31,7 +31,9 @@ struct TakeList: View {
                 .disabled(!selected.contains { ![.queued, .running].contains($0.status) })
         }
         .onDeleteCommand { model.removeTakes(model.selectedTakes, undo: undo) }
-
+        // The macOS List gives a row inserted while it shows a one-line height, so a new clip
+        // lost its voice, status, and duration. Rebuild the list when clips are added or removed.
+        .id(visible.map(\.id))
         .overlay {
             if model.takes.isEmpty {
                 ContentUnavailableView("No Clips", systemImage: "waveform", description: Text("Generate speech from Scripts. Every clip will be saved here."))

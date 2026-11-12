@@ -51,6 +51,19 @@ enum Snapshot {
                     try? await Task.sleep(for: .seconds(0.4))
                     await capture(to: "\(dir)/\(page.rawValue)-\(mode).png")
                 }
+                if only == nil || only?.contains("takes-again") == true {
+                    // "Generate Again" while the Clips list shows: the new row must look like the others.
+                    model.sidebar = .takes
+                    try? await Task.sleep(for: .seconds(0.4))
+                    if let first = model.takes.first(where: { $0.importedFilename == nil && $0.status == .completed }) {
+                        model.selectedTake = first.id
+                        try? await Task.sleep(for: .seconds(0.3))
+                        model.retryTakes([first.id])
+                        try? await Task.sleep(for: .seconds(1.0))
+                        await capture(to: "\(dir)/takes-again-\(mode).png")
+                        model.removeTakes(Set(model.library.takes.filter { $0.createdAt > first.createdAt && ![.queued, .running].contains($0.status) }.map(\.id)), undo: nil)
+                    }
+                }
                 if (only == nil || only?.contains("cached-voice") == true), let cached = model.voices.first(where: { $0.cachedFile != nil }) {
                     model.sidebar = .voices; model.selectedVoice = cached.id
                     try? await Task.sleep(for: .seconds(0.5))

@@ -15,8 +15,8 @@ final class AudioPlayback {
     var loops = false { didSet { player?.numberOfLoops = loops ? -1 : 0 } }
     func toggle(_ url: URL) throws {
         if self.url == url, let player {
-            if player.isPlaying { player.pause(); isPlaying = false }
-            else { if player.currentTime >= player.duration { player.currentTime = 0 }; player.play(); isPlaying = true }
+            if player.isPlaying { player.pause(); isPlaying = false; position = player.currentTime; stopClock() }
+            else { if player.currentTime >= player.duration { player.currentTime = 0 }; player.play(); isPlaying = true; startClock() }
             return
         }
         try start(url)
@@ -30,19 +30,29 @@ final class AudioPlayback {
         player.currentTime = min(max(0, time), max(0, player.duration - 0.01))
         guard player.play() else { throw LibraryFile.failure("This audio file could not be played.") }
         self.url = url; duration = player.duration; position = player.currentTime; isPlaying = true
+        startClock()
+    }
+    /// Moves `position` while audio plays. The clock stops when the audio stops:
+    /// every tick redraws the window, and constant redraws stop macOS from showing tooltips.
+    private func startClock() {
+        timer?.invalidate()
         timer = Timer(timeInterval: 1.0 / 30, repeats: true) { @Sendable [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, let player = self.player else { return }
-                self.position = player.currentTime; self.isPlaying = player.isPlaying
+                if self.position != player.currentTime { self.position = player.currentTime }
+                if !player.isPlaying { self.isPlaying = false; self.stopClock() }
             }
         }
         // Keep the UI clock moving while AppKit tracks mouse presses and drags.
         if let timer { RunLoop.main.add(timer, forMode: .common) }
     }
+    /// True while the position clock ticks. Only while audio plays.
+    var clockRunning: Bool { timer != nil }
+    private func stopClock() { timer?.invalidate(); timer = nil }
     /// Pauses or resumes whatever is loaded.
     func toggle() { if let url { try? toggle(url) } }
     func seek(_ value: Double) { player?.currentTime = value; position = value }
-    func stop() { player?.stop(); player = nil; timer?.invalidate(); timer = nil; url = nil; isPlaying = false; position = 0; duration = 0 }
+    func stop() { player?.stop(); player = nil; stopClock(); url = nil; isPlaying = false; position = 0; duration = 0 }
 }
 enum AudioValidation {
     static func validate(_ url: URL) throws -> Double {
