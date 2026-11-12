@@ -16,7 +16,7 @@ static func expectThrows<T>(_ operation: @autoclosure () throws -> T) throws {
     throw LibraryFile.failure("Check \(checks) expected an error")
 }
 static func main() throws {
-    try testImports(); try testSnapshotsAndRecovery(); try testCorruptLibrary(); try testCachedVoiceCompatibility(); try testTimeline(); try testScriptNamesAndDates()
+    try testImports(); try testSnapshotsAndRecovery(); try testCorruptLibrary(); try testCachedVoiceCompatibility(); try testTimeline(); try testScriptNamesAndDates(); try testClipTitles()
     print("PASS \(checks) library checks")
 }
 static func testImports() throws {
@@ -161,6 +161,25 @@ static func testScriptNamesAndDates() throws {
     let old = try JSONDecoder().decode(ScriptDocument.self, from: JSONSerialization.data(withJSONObject: json))
     try expect(old.modifiedAt == old.createdAt && old.id == script.id)
     try expect(try JSONDecoder().decode(ScriptDocument.self, from: JSONEncoder().encode(script)) == script)
+}
+
+static func testClipTitles() throws {
+    let script = ScriptDocument(title: "A quiet morning", text: "Words.")
+    func take(_ n: Int) -> SpeechTake {
+        SpeechTake(script: script, voiceName: "V", speaker: "V", references: [], language: "en", speed: 1, seed: n, modelFolder: "", device: "mps", number: n)
+    }
+    var lib = StudioLibrary()
+    let first = take(1)
+    lib.takes = [first]
+    try expect(lib.clipTitle(first) == "A quiet morning")
+    let second = take(2)
+    lib.takes.append(second)
+    try expect(lib.clipTitle(first) == "A quiet morning · Clip 1" && lib.clipTitle(second) == "A quiet morning · Clip 2")
+    var other = SpeechTake(script: ScriptDocument(title: "Other", text: "x"), voiceName: "V", speaker: "V", references: [], language: "en", speed: 1, seed: 9, modelFolder: "", device: "mps", number: 4)
+    lib.takes.append(other)
+    try expect(lib.clipTitle(other) == "Other")
+    other.importedFilename = "song.wav"; other.title = "song"
+    try expect(lib.clipTitle(other) == "song")
 }
 
 }

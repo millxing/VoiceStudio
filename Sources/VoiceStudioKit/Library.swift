@@ -86,7 +86,17 @@ public struct SpeechTake: Identifiable, Codable, Hashable, Sendable {
     public func audioURL(relativeTo libraryRoot: URL) -> URL {
         audioFile.hasPrefix("/") ? URL(fileURLWithPath: audioFile) : libraryRoot.appending(path: audioFile)
     }
+    /// The title with the clip number, like "A quiet morning · Clip 3". Imported audio has no number.
     public var displayTitle: String { importedFilename == nil ? "\(title) · Clip \(number)" : title }
+}
+extension StudioLibrary {
+    /// The name people see: the script title, plus " · Clip N" only when the same script
+    /// has more than one generated clip, so alternates stay distinct.
+    public func clipTitle(_ take: SpeechTake) -> String {
+        guard take.importedFilename == nil else { return take.title }
+        let hasSibling = takes.contains { $0.id != take.id && $0.scriptID == take.scriptID && $0.importedFilename == nil }
+        return hasSibling ? take.displayTitle : take.title
+    }
 }
 public struct StudioLibrary: Codable, Equatable, Sendable {
     public var schemaVersion = 3

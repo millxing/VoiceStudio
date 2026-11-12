@@ -88,7 +88,7 @@ struct SidebarQueue: View {
                             ForEach(items) { take in
                                 Button { model.sidebar = .takes; model.selectedTake = take.id } label: {
                                     Label {
-                                        Text(take.displayTitle).lineLimit(1).truncationMode(.middle)
+                                        Text(model.clipTitle(take)).lineLimit(1).truncationMode(.middle)
                                     } icon: {
                                         Image(systemName: take.status.symbol)
                                             .foregroundStyle(take.status == .running ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
@@ -96,7 +96,7 @@ struct SidebarQueue: View {
                                     .font(.caption).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
-                                .help("\(take.status == .running ? "Generating" : "Waiting"): \(take.displayTitle) · \(take.voiceName). Click to show the clip.")
+                                .help("\(take.status == .running ? "Generating" : "Waiting"): \(model.clipTitle(take)) · \(take.voiceName). Click to show the clip.")
                             }
                         }
                     }

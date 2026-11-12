@@ -10,7 +10,7 @@ struct TakeList: View {
         @Bindable var model = model
         List(visible, selection: $model.selectedTakes) { take in
             VStack(alignment: .leading, spacing: Space.xs) {
-                Text(take.displayTitle).lineLimit(1).help(take.displayTitle)
+                Text(model.clipTitle(take)).lineLimit(1).help(model.clipTitle(take))
                 Text(take.voiceName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 HStack {
                     Label(take.status.title, systemImage: take.status.symbol)
@@ -51,9 +51,9 @@ struct TakeDetail: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.xl) {
                     VStack(alignment: .leading, spacing: Space.sm) {
-                        Text(take.displayTitle).font(.title2).textSelection(.enabled)
+                        Text(model.clipTitle(take)).font(.title2).textSelection(.enabled)
                         if model.selectedTakes.count > 1 {
-                            Text("\(model.selectedTakes.count) clips selected · previewing \(take.displayTitle)")
+                            Text("\(model.selectedTakes.count) clips selected · previewing \(model.clipTitle(take))")
                                 .font(.callout).foregroundStyle(.secondary)
                         }
                         Label(take.status.title, systemImage: take.status.symbol).foregroundStyle(.secondary)

@@ -35,7 +35,7 @@ struct EditorBin: View {
         List(model.editorTakes, selection: $model.selectedTakes) { take in
             HStack(spacing: Space.sm) {
                 VStack(alignment: .leading, spacing: Space.xs) {
-                    Text(take.displayTitle).lineLimit(1).help(take.displayTitle)
+                    Text(model.clipTitle(take)).lineLimit(1).help(model.clipTitle(take))
                     Text("\(take.voiceName) · \(timeLabel(take.duration))").font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: Space.sm)
@@ -296,7 +296,7 @@ struct EditorDetail: View {
     }
 
     private func clipView(_ clip: TimelineClip, pps: Double) -> some View {
-        ClipView(clip: clip, take: model.takeFor(clip), peaks: model.waveforms[clip.takeID],
+        ClipView(clip: clip, take: model.takeFor(clip), title: model.takeFor(clip).map(model.clipTitle), peaks: model.waveforms[clip.takeID],
                  selected: model.selectedClips.contains(clip.id), pixelsPerSecond: pps,
                  muted: model.timeline.tracks[clip.track].muted)
             .overlay(alignment: .leading) { trimHandle(clip, leading: true, pps: pps) }
@@ -329,7 +329,7 @@ struct EditorDetail: View {
                 model.selectClip(clip.id, modifiers: NSApp.currentEvent?.modifierFlags ?? NSEvent.modifierFlags)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(model.takeFor(clip)?.displayTitle ?? "Missing clip"), track \(clip.track + 1), starts \(preciseTimeLabel(clip.start))")
+            .accessibilityLabel("\(model.takeFor(clip).map(model.clipTitle) ?? "Missing clip"), track \(clip.track + 1), starts \(preciseTimeLabel(clip.start))")
             .accessibilityAddTraits(model.selectedClips.contains(clip.id) ? .isSelected : [])
     }
 
@@ -378,7 +378,7 @@ struct EditorDetail: View {
     @ViewBuilder private func inspector(_ shown: Timeline) -> some View {
         if let clip = shown.clips.first(where: { model.selectedClips.contains($0.id) }) {
             VStack(alignment: .leading, spacing: Space.sm) {
-                Text(model.selectedClips.count > 1 ? "\(model.selectedClips.count) clips selected" : (model.takeFor(clip)?.displayTitle ?? "Missing clip")).font(.headline)
+                Text(model.selectedClips.count > 1 ? "\(model.selectedClips.count) clips selected" : (model.takeFor(clip).map(model.clipTitle) ?? "Missing clip")).font(.headline)
                 if model.selectedClips.count == 1 {
                     Text("Track \(clip.track + 1) · starts at \(preciseTimeLabel(clip.start)) · \(String(format: "%.2f", clip.length)) seconds · uses \(preciseTimeLabel(clip.inPoint))–\(preciseTimeLabel(clip.outPoint)) of the clip")
                         .font(.callout).foregroundStyle(.secondary).monospacedDigit()
@@ -495,6 +495,7 @@ struct Playhead: View {
 struct ClipView: View {
     let clip: TimelineClip
     let take: SpeechTake?
+    let title: String?
     let peaks: [Float]?
     let selected: Bool
     let pixelsPerSecond: Double
@@ -508,7 +509,7 @@ struct ClipView: View {
                     .fill(Palette.accent.opacity(0.8))
                     .padding(.top, Space.xl).padding(.bottom, Space.xs)
             }
-            Text(take?.displayTitle ?? "Missing clip")
+            Text(title ?? "Missing clip")
                 .font(.caption).lineLimit(1)
                 .foregroundStyle(take == nil ? AnyShapeStyle(.red) : AnyShapeStyle(.primary))
                 .padding(.horizontal, Space.sm).padding(.top, Space.xs)
@@ -517,7 +518,7 @@ struct ClipView: View {
         .overlay(shape.strokeBorder(Palette.accent.opacity(selected ? 1 : 0.5), lineWidth: selected ? 2 : 1))
         .opacity(muted ? 0.5 : 1)
         .contentShape(shape)
-        .help(take?.displayTitle ?? "This clip was removed from the library.")
+        .help(title ?? "This clip was removed from the library.")
     }
 }
 

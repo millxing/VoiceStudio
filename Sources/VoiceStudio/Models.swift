@@ -38,7 +38,7 @@ struct StudioPreferences: Codable, Equatable {
     var exportFolder: String?
     /// Script editor text size in points. Optional, so settings saved before it existed still load.
     var scriptFontSize: Double?
-    static let defaultScriptFontSize = 26.0
+    static let defaultScriptFontSize = 18.0
     static let scriptFontSizes = 10.0...72.0
     var scriptFont: Double {
         get { scriptFontSize ?? Self.defaultScriptFontSize }
@@ -94,6 +94,8 @@ final class AppModel {
     var queueItems: [SpeechTake] {
         library.takes.filter { $0.status == .running } + library.takes.filter { $0.status == .queued }
     }
+    /// A clip's name: the script title, numbered only when the script has several clips.
+    func clipTitle(_ take: SpeechTake) -> String { library.clipTitle(take) }
     var queuedCount: Int { library.takes.filter { $0.status == .queued }.count }
     var selectedScript: ScriptDocument? { scripts.first { selectedScripts.contains($0.id) } }
     var take: SpeechTake? { takes.first { $0.id == selectedTake } }
@@ -361,7 +363,7 @@ final class AppModel {
             return
         }
         guard engine.isReady else { return }
-        activeTake = take.id; progress = "Preparing \(take.displayTitle)…"
+        activeTake = take.id; progress = "Preparing \(clipTitle(take))…"
         mutateTake(take.id) { $0.status = .running; $0.error = "" }
         do {
             if take.audioFile.hasPrefix("/") { try validateTakesFolder(take.audioURL(relativeTo: Store.root).deletingLastPathComponent()) }
@@ -452,7 +454,7 @@ final class AppModel {
         let panel = NSSavePanel(); panel.allowedContentTypes = [.wav]
         try? FileManager.default.createDirectory(at: exportFolder, withIntermediateDirectories: true)
         panel.directoryURL = exportFolder
-        panel.nameFieldStringValue = "\(take.title.replacingOccurrences(of: "/", with: "-"))-clip-\(take.number).wav"
+        panel.nameFieldStringValue = "\(clipTitle(take).replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: " · ", with: " - ")).wav"
         guard panel.runModal() == .OK, let destination = panel.url else { return }
         do { try copyTake(take, to: destination); preferences.exportFolder = destination.deletingLastPathComponent().path }
         catch { message = "Unable to export audio: \(error.localizedDescription)" }

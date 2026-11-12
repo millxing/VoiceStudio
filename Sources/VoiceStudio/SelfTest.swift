@@ -212,7 +212,7 @@ enum SelfTest {
         var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(StudioPreferences())) as! [String: Any]
         json.removeValue(forKey: "scriptFontSize")
         let older = try JSONDecoder().decode(StudioPreferences.self, from: JSONSerialization.data(withJSONObject: json))
-        check("Settings saved before the font size existed load with 26 pt", older.scriptFont == 26)
+        check("Settings saved before the font size existed load with 18 pt", older.scriptFont == 18)
         var prefs = StudioPreferences(); prefs.scriptFont = 200
         check("Script font size stays in range", prefs.scriptFont == StudioPreferences.scriptFontSizes.upperBound)
     }
