@@ -27,3 +27,4 @@ venv/
 /Library.json
 /Preferences.json
 /Session.json
+releases/
